@@ -45,7 +45,7 @@ provider: "Your Org Name"
 
 ### Option 3: Already listed elsewhere
 
-If your endpoint is on the x402 Bazaar, Satring, l402apps, or MPP's OpenAPI directory, you're already indexed — no action needed. If you're missing, open an issue with the source and we'll investigate the aggregator.
+If your endpoint is on the x402 Bazaar, PayAI's discovery catalog, Satring, l402apps, or MPP's OpenAPI directory, you're already indexed — no action needed. If you're missing, open an issue with the source and we'll investigate the aggregator.
 
 ### Listing requirements
 

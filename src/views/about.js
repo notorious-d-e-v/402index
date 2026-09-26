@@ -39,6 +39,9 @@ export function aboutPage() {
           <strong><a href="https://paysponge.com" target="_blank" rel="noopener">Sponge</a></strong> — x402 services cataloged by PaySponge.
         </p>
         <p>
+          <strong><a href="https://payai.network" target="_blank" rel="noopener">PayAI</a></strong> — x402 services listed in the PayAI facilitator's discovery catalog (Bazaar-compatible). Endpoints already indexed from the Bazaar keep their Bazaar data.
+        </p>
+        <p>
           <strong>Well-Known</strong> — Endpoints discovered via providers' <code>/.well-known/l402-services</code> JSON documents.
         </p>
         <p>

@@ -14,7 +14,7 @@ const VEC_SCAN_BUDGET_MS = 500
 const SORT_COLUMNS = { name: 'name', price: 'price_usd', latency: 'latency_p50_ms', uptime: 'uptime_30d', reliability: 'reliability_score', registered_at: 'registered_at' }
 const VALID_HEALTH = new Set(['healthy', 'degraded', 'down', 'unknown'])
 const VALID_PROBE_STATUS = new Set(['probeable', 'unprobeable'])
-const VALID_SOURCE = new Set(['bazaar', 'satring', 'exclusive', 'l402apps', 'self-registered', 'sponge', 'well-known', 'discovery'])
+const VALID_SOURCE = new Set(['bazaar', 'satring', 'exclusive', 'l402apps', 'self-registered', 'sponge', 'payai', 'well-known', 'discovery'])
 
 const RELATED_PROTOCOLS_SQL = `(SELECT CASE WHEN COUNT(*) = 0 THEN '[]' ELSE json_group_array(s2.protocol) END FROM services s2 WHERE s2.url = services.url AND s2.id != services.id AND (s2.status = 'active' OR s2.status IS NULL) AND (s2.provider_deleted = 0 OR s2.provider_deleted IS NULL)) as related_protocols`
 

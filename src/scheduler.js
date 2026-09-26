@@ -6,6 +6,7 @@ import { pollSponge } from './aggregators/sponge.js'
 import { pollL402Directory } from './aggregators/l402directory.js'
 import { pollMPP } from './aggregators/mpp.js'
 import { pollMppscan } from './aggregators/mppscan.js'
+import { pollPayai } from './aggregators/payai.js'
 import { runHealthChecks } from './health/checker.js'
 import { classifyServices } from './services/classify.js'
 import { captureSnapshot } from './services/daily-snapshot.js'
@@ -40,7 +41,9 @@ export function refreshDerivedState({ featured = loadFeatured, classify = classi
 
 function runPolls() {
   return Promise.all([
-    pollBazaar().catch(err => console.error('[scheduler] Bazaar poll failed:', err.message)),
+    // PayAI runs after the Bazaar so URLs listed on both are already Bazaar rows when PayAI sees them.
+    pollBazaar().catch(err => console.error('[scheduler] Bazaar poll failed:', err.message))
+      .then(() => pollPayai().catch(err => console.error('[scheduler] PayAI poll failed:', err.message))),
     pollSatring().catch(err => console.error('[scheduler] Satring poll failed:', err.message)),
   ])
     .then(() => refreshDerivedState())

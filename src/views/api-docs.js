@@ -35,7 +35,7 @@ export function apiDocsPage() {
               <tr><td>protocol</td><td>string</td><td>Filter by protocol: <code>l402</code> or <code>x402</code></td></tr>
               <tr><td>category</td><td>string</td><td>Filter by category (prefix match — <code>crypto</code> matches <code>crypto/nft</code>)</td></tr>
               <tr><td>health</td><td>string</td><td>Filter by health: <code>healthy</code>, <code>degraded</code>, <code>down</code>, <code>unknown</code></td></tr>
-              <tr><td>source</td><td>string</td><td>Filter by source: <code>bazaar</code>, <code>satring</code>, <code>l402apps</code>, <code>sponge</code>, <code>well-known</code>, <code>exclusive</code>, <code>self-registered</code>, <code>discovery</code></td></tr>
+              <tr><td>source</td><td>string</td><td>Filter by source: <code>bazaar</code>, <code>satring</code>, <code>l402apps</code>, <code>sponge</code>, <code>payai</code>, <code>well-known</code>, <code>exclusive</code>, <code>self-registered</code>, <code>discovery</code></td></tr>
               <tr><td>probe_status</td><td>string</td><td>Filter by probe status: <code>probeable</code> or <code>unprobeable</code>. Unprobeable services have gateways that validate request parameters before presenting payment challenges, so generic health probes cannot elicit a 402.</td></tr>
               <tr><td>featured</td><td>boolean</td><td>Only featured services: <code>true</code></td></tr>
               <tr><td>q</td><td>string</td><td>Hybrid semantic + LIKE search (see below)</td></tr>

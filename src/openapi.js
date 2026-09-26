@@ -21,7 +21,7 @@ export const openapiSpec = {
           { name: 'protocol', in: 'query', schema: { type: 'string', enum: ['L402', 'x402', 'MPP'] }, description: 'Filter by payment protocol' },
           { name: 'category', in: 'query', schema: { type: 'string' }, description: 'Filter by category (prefix match — "crypto" matches "crypto/nft")' },
           { name: 'health', in: 'query', schema: { type: 'string', enum: ['healthy', 'degraded', 'down', 'unknown'] }, description: 'Filter by health status' },
-          { name: 'source', in: 'query', schema: { type: 'string', enum: ['bazaar', 'satring', 'l402apps', 'sponge', 'l402directory', 'mpp', 'discovery', 'self-registered'] }, description: 'Filter by data source' },
+          { name: 'source', in: 'query', schema: { type: 'string', enum: ['bazaar', 'satring', 'l402apps', 'sponge', 'payai', 'l402directory', 'mpp', 'discovery', 'self-registered'] }, description: 'Filter by data source' },
           { name: 'q', in: 'query', schema: { type: 'string' }, description: 'Hybrid semantic + LIKE search. When q is present and no explicit sort is specified, results are re-ranked using a 5-tier composite: (A) exact name match, (B) LIKE name, (C) LIKE description, (D) cosine similarity from embeddings, (E) default order. Semantic search requires embeddings to be backfilled. Falls back to LIKE-only if the embedding service is unavailable.' },
           { name: 'featured', in: 'query', schema: { type: 'boolean' }, description: 'Only return featured services' },
           { name: 'sort', in: 'query', schema: { type: 'string', enum: ['name', 'price', 'latency', 'uptime', 'reliability'] }, description: 'Sort field' },

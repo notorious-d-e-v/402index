@@ -60,6 +60,7 @@ export function homePage({ services, total, limit, offset, filters, stats, categ
             <option value="bazaar"${filters.source === 'bazaar' ? ' selected' : ''}>Bazaar</option>
             <option value="l402apps"${filters.source === 'l402apps' ? ' selected' : ''}>L402 Apps</option>
             <option value="sponge"${filters.source === 'sponge' ? ' selected' : ''}>Sponge</option>
+            <option value="payai"${filters.source === 'payai' ? ' selected' : ''}>PayAI</option>
             <option value="well-known"${filters.source === 'well-known' ? ' selected' : ''}>Well-Known</option>
             <option value="discovery"${filters.source === 'discovery' ? ' selected' : ''}>Discovery</option>
             <option value="mpp"${filters.source === 'mpp' ? ' selected' : ''}>MPP</option>

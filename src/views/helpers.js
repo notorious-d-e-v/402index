@@ -59,6 +59,7 @@ const SOURCE_URLS = {
   bazaar: 'https://x402.org',
   l402apps: 'https://l402apps.com',
   sponge: 'https://paysponge.com',
+  payai: 'https://payai.network',
   mpp: 'https://mpp.dev',
 }
 

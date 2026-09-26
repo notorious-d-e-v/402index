@@ -44,7 +44,7 @@ Register your endpoint so agents can find it:
 
 - **Self-serve:** `POST https://402index.io/api/v1/register` with your endpoint URL. The probe validates the 402 challenge, detects L402 and/or x402 support, and lists automatically.
 - **Pull request:** add a YAML file under `listings/` — see [CONTRIBUTING.md](CONTRIBUTING.md).
-- **Already on Bazaar, Satring, or l402apps?** You're already indexed — no action needed.
+- **Already on Bazaar, PayAI, Satring, or l402apps?** You're already indexed — no action needed.
 
 ### For contributors
 
@@ -62,7 +62,7 @@ npm run healthcheck     # Run health checks manually
 
 ## What's in the registry
 
-Tens of thousands of endpoints across hundreds of verified providers, aggregated from the [x402 Bazaar](https://x402.org/bazaar), [Satring](https://satring.com), [l402apps.com](https://www.l402apps.com), MPP's OpenAPI directory, and direct self-submissions — no gatekeeping by protocol.
+Tens of thousands of endpoints across hundreds of verified providers, aggregated from the [x402 Bazaar](https://x402.org/bazaar), the [PayAI](https://payai.network) facilitator's discovery catalog, [Satring](https://satring.com), [l402apps.com](https://www.l402apps.com), MPP's OpenAPI directory, and direct self-submissions — no gatekeeping by protocol.
 
 Live numbers at [402index.io/api/v1/health](https://402index.io/api/v1/health).
 
