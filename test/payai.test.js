@@ -3,7 +3,7 @@
  *
  * PayAI serves a Bazaar-compatible catalog at facilitator.payai.network/discovery/resources.
  * Many resources are listed on both PayAI and the CDP Bazaar, so the poller must not
- * overwrite rows another source already owns: it only tags them with ',payai'.
+ * overwrite rows another source already owns: it stamps separate presence.
  *
  * Run: DB_PATH=:memory: node --test test/payai.test.js
  */
@@ -59,7 +59,7 @@ function mockFetch(pages) {
     calls.push(String(url))
     const offset = parseInt(new URL(url).searchParams.get('offset')) || 0
     const body = pages[Math.floor(offset / 100)] || page([], 0)
-    return { ok: true, status: 200, json: async () => body }
+    return { ok: true, status: 200, json: async () => ({ ...body, pagination: { ...body.pagination, offset } }) }
   }
   return calls
 }
@@ -73,7 +73,8 @@ function seedRow({ url, source, name = 'Seeded name', price_usd = 0.42 }) {
 
 function cleanup() {
   db.prepare("DELETE FROM services WHERE url LIKE '%payai-test.example.com%'").run()
-  db.prepare("DELETE FROM sync_state WHERE key IN ('payai_offset', 'payai_last_full_pass')").run()
+  db.prepare("DELETE FROM sync_state WHERE key GLOB 'payai_*'").run()
+  db.prepare('DELETE FROM payai_passes').run()
 }
 
 describe('pollPayai', () => {
@@ -114,7 +115,7 @@ describe('pollPayai', () => {
     assert.equal(result.new, 101)
   })
 
-  it('does not overwrite a row the Bazaar already indexed, only tags it', async () => {
+  it('does not overwrite a row the Bazaar already indexed, only stamps presence', async () => {
     seedRow({ url: V1_URL, source: 'bazaar', name: 'Bazaar name', price_usd: 0.42 })
     mockFetch([page([v1Item(V1_URL, '990000')])])
 
@@ -123,13 +124,14 @@ describe('pollPayai', () => {
 
     assert.equal(result.new, 0)
     assert.equal(result.shared, 1)
-    const row = db.prepare("SELECT name, price_usd, source FROM services WHERE url = ? AND protocol = 'x402'").get(V1_URL)
+    const row = db.prepare("SELECT name, price_usd, source, payai_seen_pass FROM services WHERE url = ? AND protocol = 'x402'").get(V1_URL)
     assert.equal(row.name, 'Bazaar name')
     assert.equal(row.price_usd, 0.42)
-    assert.equal(row.source, 'bazaar,payai')
+    assert.equal(row.source, 'bazaar')
+    assert.ok(row.payai_seen_pass)
   })
 
-  it('appends the payai token only once across polls', async () => {
+  it('keeps the source unchanged across repeated polls', async () => {
     seedRow({ url: V1_URL, source: 'bazaar' })
     mockFetch([page([v1Item(V1_URL)])])
 
@@ -138,7 +140,7 @@ describe('pollPayai', () => {
     await pollPayai()
 
     const row = db.prepare("SELECT source FROM services WHERE url = ? AND protocol = 'x402'").get(V1_URL)
-    assert.equal(row.source, 'bazaar,payai')
+    assert.equal(row.source, 'bazaar')
   })
 
   it('updates rows it owns on the next poll', async () => {

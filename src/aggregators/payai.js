@@ -2,6 +2,8 @@ import db from '../db.js'
 import { normalizeItem } from './bazaar-utils.js'
 import { extractHostname } from '../services/url-normalize.js'
 import { generateEmbedding } from '../services/embeddings.js'
+import { eligiblePayaiItem } from './payai-policy.js'
+import { completePayaiPass, getPayaiState, setPayaiState, startPayaiPass } from './payai-presence.js'
 
 // PayAI facilitator's discovery catalog: same response shape as the CDP Bazaar
 // (items[] + pagination.total, offset-paginated, public, no key).
@@ -22,11 +24,11 @@ function stmt(key, sql) {
   return stmts[key]
 }
 
-// Same upsert as bazaar.js, with source 'payai'. Only used for rows PayAI owns
-// (new URLs, or rows PayAI indexed first).
+// Update only PayAI-owned rows and preserve provider deletion. A relisting
+// reverses our own automatic retirement, never an operator's retirement.
 const upsert = () => stmt('payaiUpsert', `
-  INSERT INTO services (id, name, description, url, protocol, price_usd, payment_asset, payment_network, category, input_schema, output_schema, provider, source, source_id, hostname)
-  VALUES (@id, @name, @description, @url, 'x402', @price_usd, @payment_asset, @payment_network, @category, @input_schema, @output_schema, @provider, 'payai', @source_id, @hostname)
+  INSERT INTO services (id, name, description, url, protocol, price_usd, payment_asset, payment_network, category, input_schema, output_schema, provider, source, source_id, hostname, http_method, payai_seen_pass)
+  VALUES (@id, @name, @description, @url, 'x402', @price_usd, @payment_asset, @payment_network, @category, @input_schema, @output_schema, @provider, 'payai', @source_id, @hostname, COALESCE(@http_method, 'GET'), @payai_seen_pass)
   ON CONFLICT(url, protocol) DO UPDATE SET
     name = CASE WHEN services.domain_verified = 1 THEN services.name ELSE excluded.name END,
     description = CASE WHEN services.domain_verified = 1 THEN services.description ELSE excluded.description END,
@@ -39,75 +41,47 @@ const upsert = () => stmt('payaiUpsert', `
     provider = CASE WHEN services.domain_verified = 1 THEN services.provider ELSE excluded.provider END,
     source_id = excluded.source_id,
     hostname = COALESCE(excluded.hostname, services.hostname),
-    provider_deleted = 0,
-    approval_reason = CASE WHEN services.provider_deleted = 1 THEN 'payai-relisted' ELSE services.approval_reason END,
+    http_method = COALESCE(@http_method, services.http_method),
+    payai_seen_pass = excluded.payai_seen_pass,
+    upstream_missing_since = NULL,
+    status = CASE WHEN services.retired_batch GLOB 'payai-auto-pass-*' THEN 'active' ELSE services.status END,
+    retired_at = CASE WHEN services.retired_batch GLOB 'payai-auto-pass-*' THEN NULL ELSE services.retired_at END,
+    retired_batch = CASE WHEN services.retired_batch GLOB 'payai-auto-pass-*' THEN NULL ELSE services.retired_batch END,
     updated_at = datetime('now')
+  WHERE services.source = 'payai' AND COALESCE(services.provider_deleted, 0) = 0
   RETURNING *
 `)
 
-// A URL already indexed from another source (usually the Bazaar) keeps its data;
-// PayAI only adds its token. Exact-token match, as in mppscan.js.
-const tagSource = () => stmt('payaiTagSource', `
-  UPDATE services SET
-    source = services.source || ',payai',
-    updated_at = datetime('now')
-  WHERE url = ? AND protocol = 'x402'
-    AND instr(',' || services.source || ',', ',payai,') = 0
-    AND (provider_deleted = 0 OR provider_deleted IS NULL)
+// Presence is independent of source ownership: Bazaar retirement relies on
+// source = 'bazaar', so never append a token to a shared row's source.
+const stampShared = () => stmt('payaiStampShared', `
+  UPDATE services SET payai_seen_pass = ?
+  WHERE url = ? AND protocol = 'x402' AND COALESCE(provider_deleted, 0) = 0
 `)
-
 const findExisting = () => stmt('payaiFindExisting',
-  "SELECT id, source FROM services WHERE url = ? AND protocol = 'x402'"
+  "SELECT id, source, provider_deleted FROM services WHERE url = ? AND protocol = 'x402'"
 )
-
-const getSyncState = () => stmt('getSyncState', 'SELECT value FROM sync_state WHERE key = ?')
-const setSyncState = () => stmt('setSyncState', `
-  INSERT INTO sync_state (key, value) VALUES (?, ?)
-  ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
-`)
+const quarantined = () => stmt('payaiQuarantined',
+  "SELECT 1 FROM quarantined_hosts WHERE hostname = ? AND state IN ('quarantined', 'held')"
+)
 
 export async function pollPayai() {
   console.log('[payai] Starting poll...')
+  const { passId, offset: initialOffset } = startPayaiPass(db, PAYAI_FULL_PASS_TIMEOUT_HOURS * 3_600_000)
+  let offset = initialOffset
+  const configuredMax = Number(process.env.PAYAI_MAX_PAGES)
+  const maxPages = Number.isSafeInteger(configuredMax) && configuredMax > 0
+    ? Math.min(configuredMax, 1000) : 100
+  let newCount = 0, updatedCount = 0, sharedCount = 0, errorCount = 0, skippedCount = 0
 
-  // Resume from last saved offset
-  const savedOffset = getSyncState().get('payai_offset')
-  let offset = savedOffset ? parseInt(savedOffset.value) || 0 : 0
-
-  // Force offset reset if last full pass was >PAYAI_FULL_PASS_TIMEOUT_HOURS ago (same guard as bazaar.js).
-  const lastFullPassRow = getSyncState().get('payai_last_full_pass')
-  const lastFullPassMs = lastFullPassRow ? new Date(lastFullPassRow.value).getTime() : 0
-  const timeoutMs = PAYAI_FULL_PASS_TIMEOUT_HOURS * 60 * 60 * 1000
-  if (!lastFullPassRow || isNaN(lastFullPassMs) || (Date.now() - lastFullPassMs) > timeoutMs) {
-    if (offset > 0) {
-      console.log(`[payai] Forcing offset reset to 0 (last full pass >${PAYAI_FULL_PASS_TIMEOUT_HOURS}h ago)`)
-      offset = 0
-      setSyncState().run('payai_offset', '0')
-    }
-  } else if (offset > 0) {
-    console.log(`[payai] Resuming from saved offset ${offset}`)
-  }
-
-  let total = null
-  let newCount = 0
-  let updatedCount = 0
-  let sharedCount = 0
-  let errorCount = 0
-
-  // Track which URLs we've seen this poll to handle dupes within a single poll
-  const seen = new Set()
-
-  while (total === null || offset < total) {
+  for (let pageNumber = 0; pageNumber < maxPages; pageNumber++) {
     const url = `${PAYAI_URL}?limit=${PAGE_SIZE}&offset=${offset}`
-
     let data
-    let fetched = false
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       try {
         const res = await fetch(url, { signal: AbortSignal.timeout(30_000) })
         if (res.status === 429) {
-          const backoff = Math.pow(2, attempt + 1) * 1000
-          console.warn(`[payai] Rate limited at offset ${offset}, retrying in ${backoff / 1000}s...`)
-          await sleep(backoff)
+          if (attempt < MAX_RETRIES - 1) await sleep(2 ** (attempt + 1) * 1000)
           continue
         }
         if (!res.ok) {
@@ -115,94 +89,68 @@ export async function pollPayai() {
           break
         }
         data = await res.json()
-        fetched = true
         break
       } catch (err) {
-        console.error(`[payai] Fetch error at offset ${offset} (attempt ${attempt + 1}):`, err.message)
+        console.error(`[payai] Fetch error at offset ${offset}:`, err.message)
         if (attempt < MAX_RETRIES - 1) await sleep(2000)
       }
     }
-    if (!fetched) {
-      console.warn(`[payai] Stopping at offset ${offset} after failed retries. Will resume next poll.`)
+    if (!data) break // Keep this pass and offset for a later run.
+    const total = data.pagination?.total
+    if (!Number.isSafeInteger(total) || total < 0 || !Array.isArray(data.items) || data.items.length > PAGE_SIZE ||
+        (data.pagination.offset !== undefined && data.pagination.offset !== offset)) {
+      console.error(`[payai] Invalid page at offset ${offset}; not advancing the pass`)
+      errorCount++
       break
     }
+    if (data.items.length === 0 && offset < total) break
 
-    if (total === null) {
-      total = data.pagination?.total || 0
-      console.log(`[payai] Total resources in PayAI catalog: ${total}`)
-    }
-
-    const items = data.items || []
-    if (items.length === 0) break
-
-    let pageNormalizedCount = 0
-    let pageErrorCount = 0
-
-    for (const item of items) {
-      try {
-        const normalized = normalizeItem(item)
-
-        // Skip dupes within this poll
-        if (seen.has(normalized.url)) continue
-        seen.add(normalized.url)
-
-        normalized.hostname = extractHostname(normalized.url)
-        pageNormalizedCount++
-
-        // PayAI owns a row only if it indexed it first (first source token is 'payai').
-        const existing = findExisting().get(normalized.url)
-        if (existing && String(existing.source).split(',')[0] !== 'payai') {
-          tagSource().run(normalized.url)
-          sharedCount++
-          continue
-        }
-
-        const row = upsert().get(normalized)
-        if (existing) {
-          updatedCount++
-        } else {
-          newCount++
-          if (row && row.registered_at === row.updated_at) {
-            setImmediate(() => generateEmbedding(row.id).catch(() => {}))
+    let pageErrors = 0
+    const embeddingIds = []
+    // Keep row stamps, coverage, and offset atomic so retries do not double-count
+    // a page or let a crash advance beyond uncommitted catalog writes.
+    db.transaction(() => {
+      for (const item of data.items) {
+        try {
+          const eligible = eligiblePayaiItem(item)
+          if (!eligible) { skippedCount++; continue }
+          const normalized = normalizeItem(eligible)
+          normalized.hostname = extractHostname(normalized.url)
+          normalized.payai_seen_pass = passId
+          if (quarantined().get(normalized.hostname)) { skippedCount++; continue }
+          const existing = findExisting().get(normalized.url)
+          if (existing?.provider_deleted) { skippedCount++; continue }
+          if (existing && existing.source !== 'payai') {
+            stampShared().run(passId, normalized.url)
+            sharedCount++
+            continue
           }
+          const row = upsert().get(normalized)
+          if (existing) updatedCount++
+          else {
+            newCount++
+            if (row) embeddingIds.push(row.id)
+          }
+        } catch (err) {
+          errorCount++
+          pageErrors++
+          console.error(`[payai] Error normalizing ${item?.resource ?? 'unknown'}:`, err.message)
         }
-      } catch (err) {
-        errorCount++
-        pageErrorCount++
-        const resourceHint = item?.resource || JSON.stringify(item)?.substring(0, 200) || 'unknown'
-        console.error(`[payai] Error normalizing item (resource: ${resourceHint}):`, err.message)
       }
-    }
-
-    if (pageErrorCount > 0 || pageNormalizedCount > 0) {
-      console.log(`[payai] Normalization: ${pageNormalizedCount} succeeded, ${pageErrorCount} failed`)
-    }
-
+      setPayaiState(db, 'offset', offset + PAGE_SIZE)
+      setPayaiState(db, 'pass_seen', Number(getPayaiState(db, 'pass_seen') || 0) + data.items.length)
+      setPayaiState(db, 'pass_errors', Number(getPayaiState(db, 'pass_errors') || 0) + pageErrors)
+      setPayaiState(db, 'pass_total', Math.max(Number(getPayaiState(db, 'pass_total') || 0), total))
+    }).immediate()
+    for (const id of embeddingIds) setImmediate(() => generateEmbedding(id).catch(() => {}))
     offset += PAGE_SIZE
-
-    // Persist offset so next poll can resume here if we get rate-limited
-    setSyncState().run('payai_offset', String(offset))
-
-    // Rate limit courtesy delay between pages
-    if (total !== null && offset < total) {
-      await sleep(PAGE_DELAY_MS)
+    if (offset >= total) {
+      const pass = completePayaiPass(db, passId)
+      console.log(`[payai] Finished pass ${pass.passId}: seen=${pass.seen} total=${pass.upstreamTotal} complete=${pass.complete} retired=${pass.retired}`)
+      break
     }
+    if (pageNumber + 1 < maxPages) await sleep(PAGE_DELAY_MS)
   }
-
-  // If we reached the end (or past it), reset offset for next full pass and record timestamp
-  if (total !== null && offset >= total) {
-    setSyncState().run('payai_offset', '0')
-    setSyncState().run('payai_last_full_pass', new Date().toISOString())
-    console.log('[payai] Completed full catalog pass, resetting offset to 0')
-  }
-
-  const totalProcessed = newCount + updatedCount + sharedCount + errorCount
-
-  // Alert if >50% of items failed normalization — API format may have changed
-  if (totalProcessed > 0 && errorCount > 0.5 * totalProcessed) {
-    console.error(`[payai] ALERT: >50% of PayAI items failed to normalize (${errorCount}/${totalProcessed}). API format may have changed!`)
-  }
-
-  console.log(`[payai] Synced ${newCount + updatedCount + sharedCount} services from PayAI (${newCount} new, ${updatedCount} updated, ${sharedCount} already indexed from another source${errorCount > 0 ? `, ${errorCount} errors` : ''})`)
+  console.log(`[payai] Synced ${newCount + updatedCount + sharedCount} resources (${skippedCount} skipped, ${errorCount} errors)`)
   return { new: newCount, updated: updatedCount, shared: sharedCount, errors: errorCount }
 }

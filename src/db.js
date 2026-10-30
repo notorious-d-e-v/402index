@@ -7,6 +7,7 @@ import { createHash } from 'crypto'
 import { ensureQueryLogDaily, rollupQueryLog, QUERY_LOG_RETENTION_DAYS } from './services/query-log-rollup.js'
 import { ensureQuarantineSchema } from './services/visibility.js'
 import { ensureBazaarPresenceSchema } from './aggregators/bazaar-presence.js'
+import { ensurePayaiPresenceSchema } from './aggregators/payai-presence.js'
 import { ensureSchedulerEvents, pruneSchedulerEvents } from './services/scheduler-events.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -914,6 +915,7 @@ db.exec(`
 ensureQueryLogDaily(db)
 ensureQuarantineSchema(db)
 ensureBazaarPresenceSchema(db)
+ensurePayaiPresenceSchema(db)
 ensureSchedulerEvents(db)
 
 // Migration: add degraded_reason column for hybrid search degradation tracking
