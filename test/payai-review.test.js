@@ -51,7 +51,10 @@ describe('PayAI review regressions', () => {
   })
 
   it('skips testnet-only offers and uses a mainnet offer from a mixed resource', async () => {
-    const networks = ['eip155:84532', 'base-sepolia', 'solana-devnet', 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1']
+    const networks = ['eip155:84532', 'base-sepolia', 'solana-devnet', 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+      'eip155:97', 'bsc-testnet', 'eip155:43113', 'avalanche-fuji', 'eip155:713715', 'sei-testnet',
+      'eip155:80002', 'polygon-amoy', 'eip155:1952', 'xlayer-testnet',
+      'eip155:324705682', 'skale-base-sepolia', 'eip155:421614', 'arbitrum-sepolia']
     serve([[...networks.map((network, i) => item(i, [offer(network)])),
       item('mixed', [{ ...offer('eip155:84532'), amount: '9990000' }, offer()])]])
     await pollPayai()
