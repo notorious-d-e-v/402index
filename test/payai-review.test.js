@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import db from '../src/db.js'
 import { pollPayai } from '../src/aggregators/payai.js'
+import { queryServices } from '../src/queries/services.js'
 
 const originalFetch = globalThis.fetch
 const url = n => `https://payai-review.example.com/${n}`
@@ -144,6 +145,51 @@ describe('PayAI review regressions', () => {
     assert.equal(passes()[0].seen, 100)
     assert.equal(passes()[0].complete, 1)
     assert.ok(row('absent').upstream_missing_since)
+  })
+
+  it('does not treat malformed items as intentional policy exclusions', async () => {
+    seed('absent')
+    serve([[null, { resource: url('malformed'), accepts: 'invalid' }]])
+    const result = await pollPayai()
+    assert.equal(result.errors, 2)
+    assert.equal(passes()[0].complete, 0)
+    assert.equal(row('absent').upstream_missing_since, null)
+  })
+
+  it('resumes after an HTTP failure without double-counting committed pages', async () => {
+    const first = Array.from({ length: 100 }, (_, i) => item(i))
+    const calls = serve([first], 101)
+    await pollPayai()
+    assert.deepEqual(calls, [0, 100])
+    assert.equal(passes().length, 0)
+    const resumed = serve([first, [item(100)]], 101)
+    await pollPayai()
+    assert.deepEqual(resumed, [100])
+    assert.equal(passes()[0].seen, 101)
+    assert.equal(passes()[0].complete, 1)
+  })
+
+  it('uses a new pass id when an unfinished pass expires', async () => {
+    process.env.PAYAI_MAX_PAGES = '1'
+    serve([Array.from({ length: 100 }, (_, i) => item(i))], 101)
+    await pollPayai()
+    const abandoned = row(1).payai_seen_pass
+    db.prepare("UPDATE sync_state SET value = '2000-01-01T00:00:00Z' WHERE key = 'payai_pass_started_at'").run()
+    const calls = serve([[item('new')]])
+    await pollPayai()
+    assert.deepEqual(calls, [0])
+    assert.ok(row('new').payai_seen_pass > abandoned)
+    assert.ok(row(1).upstream_missing_since)
+    assert.equal(passes().length, 1)
+  })
+
+  it('executes the public payai source filter against SQLite', async () => {
+    seed('other', 'bazaar')
+    serve([[item('owned')]])
+    await pollPayai()
+    const result = queryServices(db, { source: 'payai' })
+    assert.equal(result.total, 1)
+    assert.equal(result.services[0].url, url('owned'))
   })
 
   it('preserves v2 POST and keeps it when a later declaration omits a method', async () => {
