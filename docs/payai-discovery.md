@@ -13,7 +13,10 @@ The importer excludes IP literals and the tunnel/IP-alias domains requested in
 hostname normalization. Non-HTTP URLs, credentials in URLs, and local hostnames
 are also excluded.
 
-Base Sepolia and Solana Devnet offers, plus legacy `solana-testnet`, are excluded. If a resource also
+All PayAI-supported testnets are excluded in both legacy and CAIP-2 formats:
+Base Sepolia, Solana Devnet, BSC testnet, Avalanche Fuji, Sei testnet, Polygon
+Amoy, X Layer testnet, SKALE Base Sepolia, and Arbitrum Sepolia (also legacy
+`solana-testnet`). If a resource also
 has a mainnet offer, the normalizer uses a retained offer, so its displayed
 price and network do not come from the testnet offer.
 
@@ -21,6 +24,8 @@ These are 402index admission choices. The [upstream spec](https://github.com/x40
 leaves catalog exposure to facilitators. [Coinbase's guidance](https://docs.cdp.coinbase.com/x402/seller/get-discovered)
 supports testnet discovery and describes lower ranking for shared tunnel hosts.
 Their existence in a source catalog is not itself a protocol violation.
+PayAI has also chosen to exclude testnets from its public catalog; the importer
+retains its own filter so it does not depend on that deployment or cleanup.
 
 ## Ownership and moderation
 

@@ -4,6 +4,9 @@ import { isIP } from 'node:net'
 const EXCLUDED_HOSTS = ['trycloudflare.com', 'ngrok.io', 'ngrok-free.app', 'ngrok.app',
   'ts.net', 'lhr.life', 'srv.us', 'sslip.io', 'nip.io', 'localhost', 'localhost.localdomain']
 const TESTNETS = new Set(['eip155:84532', 'base-sepolia', 'solana-devnet', 'solana-testnet',
+  'eip155:97', 'bsc-testnet', 'eip155:43113', 'avalanche-fuji', 'eip155:713715', 'sei-testnet',
+  'eip155:80002', 'polygon-amoy', 'eip155:1952', 'xlayer-testnet',
+  'eip155:324705682', 'skale-base-sepolia', 'eip155:421614', 'arbitrum-sepolia',
   'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'.toLowerCase()])
 
 export function eligiblePayaiItem(item) {
