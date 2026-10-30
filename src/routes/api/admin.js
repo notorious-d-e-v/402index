@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { randomUUID, randomBytes, createHash } from 'crypto'
+import { mcpAllTime } from '../../services/query-log-rollup.js'
 import db from '../../db.js'
 import { extractHostname } from '../../services/url-normalize.js'
 import { generateEmbedding } from '../../services/embeddings.js'
@@ -258,14 +259,8 @@ router.get('/admin/traffic', (req, res) => {
      LIMIT 10`
   ).all()
 
-  const mcpSummary = db.prepare(
-    `SELECT COUNT(*) as total,
-            COUNT(DISTINCT date(timestamp)) as activeDays,
-            MIN(timestamp) as firstSeen,
-            MAX(timestamp) as lastSeen
-     FROM query_log
-     WHERE user_agent LIKE '%402index-mcp%'`
-  ).get()
+  // Raw rows are kept 30 days; older ones live in query_log_daily (see query-log-rollup.js).
+  const mcpSummary = mcpAllTime(db)
 
   res.json({
     summary: { today, week, uniqueAgentsToday, mcpToday },

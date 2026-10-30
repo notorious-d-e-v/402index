@@ -3,6 +3,7 @@ import db, { logQuery } from '../../db.js'
 import { queryServicesHybrid, buildServiceQuery, API_COLUMNS } from '../../queries/services.js'
 import { getCachedBtcUsdRate } from '../../services/btc-price.js'
 import { getProvider } from '../../services/l402-provider.js'
+import { sendGatewayUnavailable } from '../../services/l402-degraded.js'
 
 const router = Router()
 
@@ -95,12 +96,21 @@ router.get('/export.csv', async (req, res) => {
         })
       }
     } catch (err) {
+      // The gateway answered with an error, or not at all. Either way there is no invoice
+      // to hand over, and "Payment Required" without one strands the caller — on
+      // 2026-08-03 this branch ran for hours while Boltz had swap creation disabled, and
+      // the old bare 402 sent agents to `?l402=require`, which answered 429. Say what is
+      // actually true instead.
       console.error('[export.csv] L402 challenge creation failed:', err.message)
+      return sendGatewayUnavailable(res)
     }
-    // Fallback: bare 402 (graceful degradation if provider unavailable)
+    // No challenge and no error: the provider is the stub, meaning this deployment has no
+    // payment gateway wired at all. That is a configuration state, not an outage, so it
+    // stays a 402 — but it must not point at `?l402=require`, which needs the same absent
+    // gateway and would only bounce the caller between two dead ends.
     return res.status(402).json({
       error: 'Payment Required',
-      message: 'CSV export requires L402 payment. Add ?l402=require to any API endpoint, or include an L402 token in the Authorization header.',
+      message: 'CSV export requires L402 payment. Include an L402 token in the Authorization header. This deployment has no Lightning payment gateway configured.',
     })
   }
 

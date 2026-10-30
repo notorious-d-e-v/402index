@@ -1,0 +1,9 @@
+name: "fry.farm x402"
+url: "https://fry.farm/x402/fleet"
+protocol: x402
+price_usd: 0.01
+payment_asset: "USDC"
+payment_network: "Algorand"
+category: "crypto/defi"
+description: "Multi-chain DeFi/DePIN hub for AI agents: Algorand pay-per-call data + non-custodial transaction builders (unsigned atomic groups, agents sign with their own wallet); Solana + Base market-data endpoints (Jupiter quotes, Raydium pools, Marinade staking, 0x prices, Aerodrome pools) settling via the GoPlausible facilitator."
+provider: "Fry Networks"

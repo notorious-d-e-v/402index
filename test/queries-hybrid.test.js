@@ -309,59 +309,22 @@ describe('Group B — timeouts and graceful fallback (#150)', () => {
     }
   })
 
-  it('B4: sqlite-vec 500ms deadline (requires sqlite-vec; falls back to JS path otherwise)', async () => {
+  it('B4: sqlite-vec available → semantic path returns results', async () => {
+    if (!SQLITE_VEC_AVAILABLE) return // the no-vec contract is B5
     stubEmbedQuery(WEATHER_QUERY_VEC)
-    if (!SQLITE_VEC_AVAILABLE) {
-      // sqlite-vec not available in this env — vec-deadline can't fire.
-      // Verify the pure-JS fallback path works instead.
-      const result = await queryServicesHybrid(db, { q: 'weather', rawLimit: 50 }, API_COLUMNS)
-      assert.ok(result, 'pure-JS fallback should return results when sqlite-vec unavailable')
-      return
-    }
-    // With sqlite-vec available: the 500ms deadline should be enforced
     const result = await queryServicesHybrid(db, { q: 'weather', rawLimit: 50 }, API_COLUMNS)
     assert.ok(result, 'should return results')
   })
 
-  it('B5: service_embeddings > 5000 rows + no sqlite-vec → js-fallback-too-large', async () => {
+  // B5/B6 used to exercise a pure-JS cosine scan over service_embeddings. That table stopped
+  // holding vectors on 2026-10-27, so without sqlite-vec there is nothing to scan: the search
+  // degrades with vec-unavailable. test/embeddings-single-store.test.js runs that path in a
+  // DISABLE_SQLITE_VEC=1 child, so it is covered even where sqlite-vec loads.
+  it('B5: no sqlite-vec → vec-unavailable', async () => {
     if (SQLITE_VEC_AVAILABLE) return // Only applies when sqlite-vec unavailable
-
-    // Insert 5001 dummy embeddings
-    const insert = db.prepare('INSERT OR IGNORE INTO services (id, name, url, protocol, source, status, hostname) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    const insertEmb = db.prepare('INSERT OR IGNORE INTO service_embeddings (service_id, embedding, model, embedded_at) VALUES (?, ?, ?, ?)')
-    const dummyBlob = Buffer.from(new Float32Array(DIMS).buffer)
-
-    const insertMany = db.transaction(() => {
-      for (let i = 0; i < 5001; i++) {
-        const id = `hybrid-bulk-${i}`
-        insert.run(id, `Bulk${i}`, `https://bulk-${i}.example.com`, 'x402', 'test', 'active', 'bulk.example.com')
-        insertEmb.run(id, dummyBlob, 'text-embedding-3-small', Math.floor(Date.now() / 1000))
-      }
-    })
-    insertMany()
-
-    try {
-      stubOpenAIOnly(async () => {
-        const embedding = Array.from(WEATHER_QUERY_VEC)
-        return { ok: true, status: 200, json: async () => ({ data: [{ embedding }], model: 'text-embedding-3-small', usage: {} }) }
-      })
-      const res = await originalFetch(`${API}/api/v1/services?q=weather`)
-      assert.equal(res.status, 200)
-      assert.equal(res.headers.get('x-402index-search-degraded'), 'js-fallback-too-large')
-    } finally {
-      db.exec("DELETE FROM service_embeddings WHERE service_id LIKE 'hybrid-bulk-%'")
-      db.exec("DELETE FROM services WHERE id LIKE 'hybrid-bulk-%'")
-    }
-  })
-
-  it('B6: pure-JS fallback with ≤5000 rows → cosine runs correctly', async () => {
-    if (SQLITE_VEC_AVAILABLE) return // Only applies when sqlite-vec unavailable
-
     stubEmbedQuery(WEATHER_QUERY_VEC)
     const result = await queryServicesHybrid(db, { q: 'weather', rawLimit: 50 }, API_COLUMNS)
-    // Prime Technology has embedding close to weather query, should appear in results
-    const names = result.services.map(s => s.name)
-    assert.ok(names.includes('Prime Technology'), 'Prime Technology should appear via pure-JS cosine')
+    assert.equal(result.degradedReason, 'vec-unavailable')
   })
 
   it('B7: any degraded response → status 200, header present, logQuery receives reason', async () => {
@@ -371,7 +334,7 @@ describe('Group B — timeouts and graceful fallback (#150)', () => {
     assert.equal(res.status, 200, 'must be 200, never 5xx on semantic failure')
     const degraded = res.headers.get('x-402index-search-degraded')
     assert.ok(degraded, 'X-402index-Search-Degraded header must be present')
-    assert.ok(['no-api-key', 'embed-timeout', 'embed-error', 'circuit-open', 'vec-deadline', 'js-fallback-too-large'].includes(degraded),
+    assert.ok(['no-api-key', 'embed-timeout', 'embed-error', 'circuit-open', 'vec-deadline', 'vec-unavailable'].includes(degraded),
       `reason code must be from the fixed enum, got: ${degraded}`)
   })
 

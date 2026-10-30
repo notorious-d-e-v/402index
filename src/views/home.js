@@ -76,7 +76,7 @@ export function homePage({ services, total, limit, offset, filters, stats, categ
           <input type="text" name="q" placeholder="Search name, description, or URL..." value="${escapeHtml(filters.q || '')}">
           <button type="button" class="filter-toggle" onclick="this.form.classList.toggle('filters-open')">Filters ▾</button>
           <label><input type="checkbox" name="featured" value="true"${filters.featured ? ' checked' : ''} onchange="this.form.submit()"> Featured only</label>
-          <label><input type="checkbox" name="payment_valid" value="true"${filters.payment_valid ? ' checked' : ''} onchange="this.form.submit()"> Payment verified</label>
+          <label><input type="checkbox" name="payment_valid" value="true"${filters.payment_valid ? ' checked' : ''} onchange="this.form.submit()"> 402 header parsed</label>
           <button type="submit" class="filter-btn">Filter</button>
           ${hasFilters ? '<a href="/directory" class="filter-clear">Clear</a>' : ''}
         </form>

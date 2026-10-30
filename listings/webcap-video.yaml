@@ -1,0 +1,9 @@
+name: "webcap — video (scroll-capture video)"
+url: "https://webcap.shoutsid.fyi/v1/x402/video"
+protocol: "x402"
+description: "Scroll-capture a URL as an MP4/WebM video in one call. Gasless x402 USDC payment on Base."
+category: "media"
+provider: "webcap"
+price_usd: 0.005
+payment_asset: "USDC"
+payment_network: "Base"

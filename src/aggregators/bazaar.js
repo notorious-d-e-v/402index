@@ -2,6 +2,7 @@ import db from '../db.js'
 import { normalizeItem } from './bazaar-utils.js'
 import { extractHostname } from '../services/url-normalize.js'
 import { generateEmbedding } from '../services/embeddings.js'
+import { completePass, currentPassId } from './bazaar-presence.js'
 
 const BAZAAR_URL = 'https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources'
 const PAGE_SIZE = 100
@@ -23,8 +24,8 @@ function stmt(key, sql) {
 // Bug A fix: removed WHERE guard so re-listed soft-deleted services are reactivated.
 // Added provider_deleted = 0 and conditional approval_reason to SET clause.
 const upsert = () => stmt('upsert', `
-  INSERT INTO services (id, name, description, url, protocol, price_usd, payment_asset, payment_network, category, input_schema, output_schema, provider, source, source_id, hostname)
-  VALUES (@id, @name, @description, @url, 'x402', @price_usd, @payment_asset, @payment_network, @category, @input_schema, @output_schema, @provider, 'bazaar', @source_id, @hostname)
+  INSERT INTO services (id, name, description, url, protocol, price_usd, payment_asset, payment_network, category, input_schema, output_schema, provider, source, source_id, http_method, hostname, bazaar_seen_pass)
+  VALUES (@id, @name, @description, @url, 'x402', @price_usd, @payment_asset, @payment_network, @category, @input_schema, @output_schema, @provider, 'bazaar', @source_id, COALESCE(@http_method, 'GET'), @hostname, @bazaar_seen_pass)
   ON CONFLICT(url, protocol) DO UPDATE SET
     name = CASE WHEN services.domain_verified = 1 THEN services.name ELSE excluded.name END,
     description = CASE WHEN services.domain_verified = 1 THEN services.description ELSE excluded.description END,
@@ -34,11 +35,18 @@ const upsert = () => stmt('upsert', `
     category = CASE WHEN services.domain_verified = 1 THEN services.category ELSE excluded.category END,
     input_schema = excluded.input_schema,
     output_schema = excluded.output_schema,
+    -- A declared method wins; an undeclared one leaves the stored method alone (#353).
+    http_method = COALESCE(@http_method, services.http_method),
     provider = CASE WHEN services.domain_verified = 1 THEN services.provider ELSE excluded.provider END,
     source_id = excluded.source_id,
     hostname = COALESCE(excluded.hostname, services.hostname),
     provider_deleted = 0,
     approval_reason = CASE WHEN services.provider_deleted = 1 THEN 'bazaar-relisted' ELSE services.approval_reason END,
+    -- Listed again: stamp the pass, clear the missing flag, undo a churn retirement (bazaar-presence.js).
+    bazaar_seen_pass = excluded.bazaar_seen_pass,
+    upstream_missing_since = NULL,
+    status = CASE WHEN services.status = 'retired' THEN 'active' ELSE services.status END,
+    retired_batch = CASE WHEN services.status = 'retired' THEN NULL ELSE services.retired_batch END,
     updated_at = datetime('now')
   RETURNING *
 `)
@@ -77,6 +85,7 @@ export async function pollBazaar() {
   }
 
   let total = null
+  const passId = currentPassId(db)
   let newCount = 0
   let updatedCount = 0
   let errorCount = 0
@@ -137,6 +146,7 @@ export async function pollBazaar() {
         seen.add(normalized.url)
 
         normalized.hostname = extractHostname(normalized.url)
+        normalized.bazaar_seen_pass = passId
 
         // Check if service already exists (excludes soft-deleted rows — Bug A fix)
         const existing = findExisting().get(normalized.url, 'x402')
@@ -182,7 +192,8 @@ export async function pollBazaar() {
   if (total !== null && offset >= total) {
     setSyncState().run('bazaar_offset', '0')
     setSyncState().run('bazaar_last_full_pass', new Date().toISOString())
-    console.log(`[bazaar] Completed full catalog pass, resetting offset to 0`)
+    const pass = completePass(db, total)
+    console.log(`[bazaar] Completed full catalog pass ${pass.passId}: upstream_total=${pass.upstreamTotal} seen=${pass.seen} complete=${pass.complete} marked_missing=${pass.markedMissing} retired=${pass.retired}, resetting offset to 0`)
   }
 
   const totalProcessed = newCount + updatedCount + errorCount
@@ -192,6 +203,6 @@ export async function pollBazaar() {
     console.error(`[bazaar] ALERT: >50% of Bazaar items failed to normalize (${errorCount}/${totalProcessed}). API format may have changed!`)
   }
 
-  console.log(`[bazaar] Synced ${newCount + updatedCount} services from Bazaar (${newCount} new, ${updatedCount} updated${errorCount > 0 ? `, ${errorCount} errors` : ''})`)
+  console.log(`[bazaar] Synced ${newCount + updatedCount} services from Bazaar (${newCount} new, ${updatedCount} updated${errorCount > 0 ? `, ${errorCount} errors` : ''}) upstream_total=${total ?? 'unknown'}`)
   return { new: newCount, updated: updatedCount, errors: errorCount }
 }

@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import Database from 'better-sqlite3'
 import { findOpportunities } from '../src/services/opportunities.js'
+import { withQuarantineSchema } from './helpers/test-db.js'
 
 describe('opportunities respects soft-deleted services', () => {
   let db
@@ -23,6 +24,7 @@ describe('opportunities respects soft-deleted services', () => {
         source TEXT DEFAULT 'test'
       );
     `)
+    withQuarantineSchema(db)
 
     // 4 services in AI — before soft-delete: total=4, healthy=2, l402=2, x402=2
     const ins = db.prepare(`INSERT INTO services (url, name, protocol, category, health_status, status) VALUES (?, ?, ?, 'AI', ?, 'active')`)

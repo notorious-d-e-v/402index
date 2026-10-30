@@ -1,4 +1,5 @@
 import { SQLITE_VEC_AVAILABLE } from '../db.js'
+import { ACTIVE, LISTED } from '../services/visibility.js'
 
 // Replicates SQLite's default NOCASE collation: folds only ASCII A-Z → a-z.
 // Non-ASCII characters (accented letters, etc.) are left untouched, matching
@@ -68,6 +69,7 @@ export function buildServiceQuery(opts = {}) {
     order,
     rawLimit,
     rawOffset,
+    quarantined,
   } = opts
 
   // Fix: use nullish coalescing to handle limit=0 correctly (0 is falsy but valid input)
@@ -77,7 +79,8 @@ export function buildServiceQuery(opts = {}) {
   const parsedOffset = parseInt(rawOffset)
   const offset = Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0)
 
-  const conditions = ["(status = 'active' OR status IS NULL) AND (provider_deleted = 0 OR provider_deleted IS NULL)"]
+  // quarantined=true opts back in to rows on quarantined hosts (src/services/visibility.js).
+  const conditions = [quarantined === true || quarantined === 'true' ? ACTIVE : LISTED]
   const params = {}
 
   if (protocol) {
@@ -259,7 +262,7 @@ export async function queryServicesHybrid(db, opts, columns = API_COLUMNS) {
   }
 
   // ─── Attempt semantic path ───────────────────────────────────────────────
-  const { embedQueryForRead, cosineSimilarity } = await import('../services/embeddings.js')
+  const { embedQueryForRead } = await import('../services/embeddings.js')
   const { embedding, degradedReason } = await embedQueryForRead(qNormalized, 1500)
 
   if (degradedReason || !embedding) {
@@ -314,31 +317,10 @@ export async function queryServicesHybrid(db, opts, columns = API_COLUMNS) {
       vecDegraded = 'vec-error'
     }
   } else {
-    // Pure-JS fallback with row count guard
-    const countRow = db.prepare('SELECT COUNT(*) as c FROM service_embeddings').get()
-    if (countRow.c > 5000) {
-      vecDegraded = 'js-fallback-too-large'
-    } else {
-      const started = Date.now()
-      try {
-        const rows = db.prepare('SELECT service_id, embedding FROM service_embeddings').all()
-        for (const row of rows) {
-          if (row.embedding.byteLength % 4 !== 0) throw new Error(`Malformed embedding for ${row.service_id}: byteLength=${row.embedding.byteLength} not divisible by 4`)
-          const vec = new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4)
-          if (vec.length === 1536) {
-            semanticScores.set(row.service_id, cosineSimilarity(embedding, vec))
-          }
-        }
-        const elapsed = Date.now() - started
-        if (elapsed > VEC_SCAN_BUDGET_MS) {
-          console.warn(`[search] slow JS cosine fallback: ${elapsed}ms over ${rows.length} embeddings`)
-        }
-      } catch (err) {
-        console.warn(`[search] JS cosine fallback failed: ${err.message}`)
-        semanticScores = new Map()
-        vecDegraded = 'vec-error'
-      }
-    }
+    // There is no second vector store to fall back to: service_embeddings stopped holding
+    // vectors on 2026-10-27, and the pure-JS cosine scan over it refused to run above
+    // 5,000 rows anyway. Say so rather than return LIKE results that look semantic.
+    vecDegraded = 'vec-unavailable'
   }
 
   if (vecDegraded) {

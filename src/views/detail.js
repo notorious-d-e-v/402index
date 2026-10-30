@@ -37,6 +37,7 @@ export function detailPage(service) {
         <p style="margin-bottom:12px"><a href="/">&larr; Back to directory</a></p>
         <h1>${escapeHtml(service.name)}${verifiedBadge(service)}</h1>
         <a href="${safeHref(service.url)}" class="detail-url" target="_blank">${escapeHtml(service.url)}</a>
+        ${service.quarantine ? `<p class="quarantine-banner" role="status"><strong>Host quarantined</strong> since ${escapeHtml(service.quarantine.entered_at || 'seeding')}: ${escapeHtml(service.quarantine.reason || 'no paywall response from this host')}. This endpoint is hidden from counts and default listings until its host answers with a 402 again.</p>` : ''}
       </div>
 
       <div class="detail-grid">

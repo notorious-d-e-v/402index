@@ -27,7 +27,7 @@ export const openapiSpec = {
           { name: 'sort', in: 'query', schema: { type: 'string', enum: ['name', 'price', 'latency', 'uptime', 'reliability'] }, description: 'Sort field' },
           { name: 'order', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'] }, description: 'Sort order' },
           { name: 'payment_valid', in: 'query', schema: { type: 'boolean' }, description: 'Only x402 services with verified payment requirements' },
-          { name: 'verified', in: 'query', schema: { type: 'boolean' }, description: 'Only payment-verified services (x402: valid payment headers, L402/MPP: healthy). Domain-verified services ranked first. Recommended for agents making payment decisions.' },
+          { name: 'verified', in: 'query', schema: { type: 'boolean' }, description: 'Only services whose 402 challenge parsed (x402: valid payment headers, L402/MPP: healthy). This is not proof a payment settles. Domain-verified services ranked first. Recommended for agents making payment decisions.' },
           { name: 'l402_format', in: 'query', schema: { type: 'string', enum: ['v2_tlv', 'v1_binary', 'v0_text', 'json', 'unknown'] }, description: 'Filter L402 endpoints by macaroon token format' },
           { name: 'lnget_compatible', in: 'query', schema: { type: 'boolean' }, description: 'Filter L402 endpoints by lnget client compatibility' },
           { name: 'limit', in: 'query', schema: { type: 'integer', minimum: 1, maximum: 200, default: 50 }, description: 'Results per page' },
@@ -39,7 +39,7 @@ export const openapiSpec = {
             headers: {
               'X-402index-Search-Degraded': {
                 description: 'Present when semantic search was attempted but failed. Indicates the reason the response was served from LIKE-only fallback.',
-                schema: { type: 'string', enum: ['no-api-key', 'embed-timeout', 'embed-error', 'circuit-open', 'vec-deadline', 'js-fallback-too-large'] },
+                schema: { type: 'string', enum: ['no-api-key', 'embed-timeout', 'embed-error', 'circuit-open', 'vec-deadline', 'vec-unavailable'] },
               },
               'X-402index-Semantic-Cap': {
                 description: "'true' when semantic neighbors were truncated at the top-K boundary. Consumers should treat pagination beyond this window as unreliable. Always present on every /api/v1/services response.",

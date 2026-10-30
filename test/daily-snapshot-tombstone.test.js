@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import Database from 'better-sqlite3'
 import { captureSnapshot } from '../src/services/daily-snapshot.js'
+import { withQuarantineSchema } from './helpers/test-db.js'
 
 describe('daily-snapshot respects soft-deleted services', () => {
   let db
@@ -58,6 +59,7 @@ describe('daily-snapshot respects soft-deleted services', () => {
         created_at TEXT DEFAULT (datetime('now'))
       );
     `)
+    withQuarantineSchema(db)
 
     const ins = db.prepare(`INSERT INTO services (url, name, protocol, health_status, status) VALUES (?, ?, ?, ?, 'active')`)
     ins.run('https://a.com/api', 'Service A', 'L402', 'healthy')

@@ -1,0 +1,9 @@
+name: "webcap — audit (SEO + link/OG health)"
+url: "https://webcap.shoutsid.fyi/v1/x402/audit"
+protocol: "x402"
+description: "SEO basics + link/OG health for any URL in one call. Gasless x402 USDC payment on Base."
+category: "web-scraping"
+provider: "webcap"
+price_usd: 0.002
+payment_asset: "USDC"
+payment_network: "Base"

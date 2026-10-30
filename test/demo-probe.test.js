@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { formatProbeSteps, validateProbeUrl, buildProbeConfig } from '../src/services/probe-live.js'
 import Database from 'better-sqlite3'
+import { withQuarantineSchema } from './helpers/test-db.js'
+import { SWEEP_SQL } from '../src/health/checker.js'
 
 // ─── URL Validation ────────────────────────────────────────────────────────────
 
@@ -147,6 +149,7 @@ function createTestDb() {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `)
+  withQuarantineSchema(db)
   return db
 }
 
@@ -230,17 +233,9 @@ describe('buildProbeConfig', () => {
 describe('health checker service filter (regression guard)', () => {
   // Extract the getServices SQL from checker.js source (one-time, cached)
   let getServicesSql
+  // The sweep SQL is exported (it interpolates LISTED, so it can no longer be regex-extracted).
   function loadGetServicesSql() {
-    if (getServicesSql) return getServicesSql
-    const source = readFileSync(
-      new URL('../src/health/checker.js', import.meta.url), 'utf8'
-    )
-    // Match the getServices SQL between double quotes (the SQL uses single quotes internally)
-    const match = source.match(/getServices.*?"(SELECT[^"]*FROM\s+services\s+WHERE[^"]*)"/)
-
-    if (!match) throw new Error('Could not extract getServices SQL from checker.js')
-    getServicesSql = match[1].replace(/\s+/g, ' ').trim()
-    return getServicesSql
+    return SWEEP_SQL
   }
 
   function createCheckerTestDb() {
@@ -259,9 +254,13 @@ describe('health checker service filter (regression guard)', () => {
         x402_payment_valid INTEGER,
         status TEXT DEFAULT 'active',
         provider_deleted INTEGER DEFAULT 0,
-        probe_status TEXT DEFAULT 'probeable'
+        probe_status TEXT DEFAULT 'probeable',
+        source TEXT DEFAULT 'test',
+        domain_verified INTEGER DEFAULT 0,
+        last_checked TEXT
       )
     `)
+    withQuarantineSchema(db)
     return db
   }
 

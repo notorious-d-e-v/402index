@@ -258,3 +258,24 @@ describe('L402/MPP POST auto-detection regression guards', () => {
     assert.equal(updated.http_method, 'POST', 'should persist POST for MPP')
   })
 })
+
+// ─── Raw HTTP status at the insert site (#309 / #313) ───────────────────────
+
+describe('a health_checks write that fails names the raw HTTP status', () => {
+  it('406 → not_acceptable, which the CHECK enum rejects: the log line carries http=406 and the service id', async () => {
+    const svc = insertTestService({ protocol: 'L402' })
+    globalThis.fetch = async () => mockResponse(406, {})
+    const logged = []
+    const warn = mock.method(console, 'warn', (...a) => { logged.push(a.join(' ')) })
+    const errorLog = mock.method(console, 'error', (...a) => { logged.push(a.join(' ')) })
+    try {
+      await checkService({ ...svc, latency_p50_ms: null, consecutive_failures: 0, x402_payment_valid: null }).catch(() => {})
+    } finally {
+      warn.mock.restore()
+      errorLog.mock.restore()
+    }
+    const line = logged.find(l => l.includes(svc.id) && l.includes('http=406'))
+    assert.ok(line, `expected a log line naming ${svc.id} and http=406, got: ${JSON.stringify(logged)}`)
+    assert.match(line, /status=not_acceptable/)
+  })
+})

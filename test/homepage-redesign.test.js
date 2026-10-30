@@ -7,6 +7,7 @@ import { layout } from '../src/views/layout.js'
 import { styles } from '../src/views/styles.js'
 import Database from 'better-sqlite3'
 import { buildProbeSample } from '../src/routes/pages.js'
+import { withQuarantineSchema } from './helpers/test-db.js'
 
 // ─── Sample data (includes MPP stats for new homepage) ──────────────────────
 
@@ -350,6 +351,7 @@ function createTestDb() {
       error_message TEXT
     );
   `)
+  withQuarantineSchema(db)
   return db
 }
 

@@ -1,6 +1,7 @@
 import db from '../db.js'
+import { LISTED } from './visibility.js'
 
-const ACTIVE_FILTER = "(status = 'active' OR status IS NULL) AND (provider_deleted = 0 OR provider_deleted IS NULL)"
+const ACTIVE_FILTER = LISTED
 
 /**
  * Capture a daily snapshot of ecosystem metrics.

@@ -1,0 +1,9 @@
+name: "Base Transaction Decoder"
+description: "Decode one Base-chain transaction into strict JSON: asset movements, counterparties, gas cost in USD, revert status, action classification, and risk checks with explicit provenance"
+url: "https://api.0200project.com/explain"
+protocol: "x402"
+price_usd: 0.02
+payment_asset: "USDC"
+payment_network: "Base"
+category: "tools"
+provider: "0200project"

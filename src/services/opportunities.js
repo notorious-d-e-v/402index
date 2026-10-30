@@ -4,7 +4,9 @@
  * single-provider dependencies, and failing services.
  */
 
-const ACTIVE_FILTER = "(status = 'active' OR status IS NULL) AND (provider_deleted = 0 OR provider_deleted IS NULL)"
+import { LISTED } from './visibility.js'
+
+const ACTIVE_FILTER = LISTED
 
 /**
  * Find ecosystem opportunities (gaps) for developers.

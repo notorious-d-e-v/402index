@@ -1,0 +1,9 @@
+name: "webcap — extract (structured content)"
+url: "https://webcap.shoutsid.fyi/v1/x402/extract"
+protocol: "x402"
+description: "Extract structured content (headings, links, text, metadata) from one URL or a batch. Gasless x402 USDC payment on Base."
+category: "web-scraping"
+provider: "webcap"
+price_usd: 0.01
+payment_asset: "USDC"
+payment_network: "Base"

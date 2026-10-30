@@ -1,0 +1,9 @@
+name: "LightningFaucet Headers Echo"
+url: "https://lightningfaucet.com/api/l402/headers"
+protocol: "L402"
+description: "L402 headers echo endpoint for testing Lightning-paid API calls."
+category: "bitcoin"
+provider: "LightningFaucet"
+price_sats: 5
+payment_asset: "BTC"
+payment_network: "Lightning"

@@ -1,5 +1,6 @@
 import rateLimit from 'express-rate-limit'
 import { getProvider } from '../services/l402-provider.js'
+import { sendGatewayUnavailable } from '../services/l402-degraded.js'
 
 const L402_ENABLED = () => process.env.L402_ENABLED === 'true'
 const L402_PRICE_SATS = () => parseInt(process.env.L402_PRICE_SATS) || 500
@@ -23,10 +24,18 @@ async function sendL402Challenge(req, res) {
       })
     }
   } catch (err) {
+    // The gateway could not mint a challenge. Answering 429 here is a lie with teeth:
+    // `?l402=require` sets the free limit to 0 on purpose, so the "rate limit" the client
+    // hit is one we manufactured in order to sell it something. On 2026-08-03 an agent
+    // followed export.csv's own advice to add `?l402=require` and got
+    // "Rate limit exceeded. Try again later." every 70 minutes for a Boltz outage that
+    // retrying would never clear.
     console.error('[l402] Challenge creation failed:', err.message)
+    return sendGatewayUnavailable(res)
   }
 
-  // Challenge creation failed — fall back to standard 429
+  // No challenge, no error — no gateway is configured, so there is nothing to sell and the
+  // client really did exhaust the free tier. 429 is the truth in this branch.
   return res.status(429).set('Retry-After', '60').json({
     error: 'Too Many Requests',
     message: 'Rate limit exceeded. Try again later.',

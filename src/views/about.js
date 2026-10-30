@@ -73,15 +73,16 @@ export function aboutPage() {
         </p>
 
         <p>
-          <strong>Payment-verified</strong> endpoints are the subset that pass our independent
-          payment verification. What this means depends on the protocol:
+          <strong>402 header parsed</strong> marks the subset whose payment challenge we fetched and
+          parsed ourselves. Nobody pays during this check, so it shows the paywall is answering, not
+          that a payment will settle. What we check depends on the protocol:
         </p>
 
         <p>
           For <strong>L402</strong> endpoints: we send an HTTP request and confirm the service
           returns <code>402 Payment Required</code> with a valid <code>WWW-Authenticate: L402</code>
           header containing a properly formatted macaroon/token and a BOLT11 Lightning invoice.
-          If the paywall is active and the credentials parse correctly, the endpoint is payment-verified.
+          If the paywall is active and the credentials parse correctly, we mark the endpoint <em>402 header parsed</em>. That means the challenge is well formed; it does not mean anyone has paid it.
           For POST-only endpoints, we send the configured HTTP method. Some providers validate
           the request body before issuing the L402 challenge — for these, we send a per-endpoint
           probe body so the health check reaches the paywall layer.
@@ -99,7 +100,7 @@ export function aboutPage() {
           payload. We validate that the <code>accepts[]</code> array includes a recognized payment
           scheme, a known asset contract address (e.g., USDC on Base), a valid <code>payTo</code>
           address, and a reachable facilitator URL. If any of these checks fail, the endpoint is
-          indexed but not payment-verified.
+          indexed but not marked 402 header parsed.
         </p>
 
         <p>
@@ -109,7 +110,7 @@ export function aboutPage() {
           <code>method</code>, and either <code>intent</code> or <code>request</code> (base64-encoded
           payment details). The <code>method</code> field indicates the payment rail (e.g.,
           <code>tempo</code>, <code>lightning</code>). If the challenge parses correctly with all
-          required fields present, the endpoint is payment-verified.
+          required fields present, we mark the endpoint 402 header parsed.
         </p>
 
         <h3 id="wellknown">.well-known Discovery</h3>
@@ -137,14 +138,13 @@ export function aboutPage() {
         </p>
 
         <p>
-          <strong>Why do some sources show a large gap between "indexed" and "payment-verified"?</strong>
+          <strong>Why do some sources show a large gap between "indexed" and "402 header parsed"?</strong>
           Auto-registration directories may catalog endpoints when they first process a payment,
-          but don't continuously verify that the payment infrastructure remains active. 402 Index
-          checks every endpoint every hour. If an endpoint no longer returns valid payment
-          headers, it stays indexed (we still track it) but loses its payment-verified status.
-          This ongoing verification is what makes 402 Index useful for AI agents that need to
-          make autonomous spending decisions — they can trust that a payment-verified endpoint
-          will actually accept payment right now.
+          but don't keep checking that the paywall still answers. 402 Index re-checks endpoints
+          every hour, longest-unchecked first. If an endpoint stops returning a valid challenge,
+          it stays indexed but loses the 402-header-parsed mark, and a host that stops answering
+          altogether is quarantined out of our counts until it answers again. A parsed challenge
+          is evidence the paywall is up, not proof that a payment will settle.
         </p>
 
         <h2>For API providers</h2>

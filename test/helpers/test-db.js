@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3'
+import { ensureQuarantineSchema } from '../../src/services/visibility.js'
 
 /**
  * Create a fresh :memory: SQLite DB with the full canonical schema.
@@ -190,5 +191,17 @@ export function createTestDb() {
       ON service_embeddings(embedded_at);
   `)
 
+  ensureQuarantineSchema(db)
+  return db
+}
+
+/**
+ * Give a bare test schema what LISTED (src/services/visibility.js) reads: services.hostname and
+ * the quarantined_hosts table. For tests that build their own minimal services table.
+ */
+export function withQuarantineSchema(db) {
+  const cols = db.pragma('table_info(services)').map(c => c.name)
+  if (!cols.includes('hostname')) db.exec('ALTER TABLE services ADD COLUMN hostname TEXT')
+  ensureQuarantineSchema(db)
   return db
 }

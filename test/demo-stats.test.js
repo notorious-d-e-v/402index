@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import Database from 'better-sqlite3'
 import { buildProbeSample } from '../src/routes/pages.js'
+import { withQuarantineSchema } from './helpers/test-db.js'
 
 // ─── Test database setup ─────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ function createTestDb() {
       error_message TEXT
     );
   `)
+  withQuarantineSchema(db)
   return db
 }
 

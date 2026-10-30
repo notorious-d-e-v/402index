@@ -57,6 +57,20 @@ export function categorizeFromDescription(description) {
  * @returns {object} Normalized service object matching the internal schema
  * @throws {Error} If the item has neither an accepts array nor a resource URL.
  */
+const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+
+/**
+ * The HTTP method a Bazaar declaration names, upper-cased, or null when it
+ * names none we recognise. x402 v2 declares it at
+ * `extensions.bazaar.info.input.method`; v1 at `accepts[0].outputSchema.input`.
+ * @param {object|undefined} input - The declared input object
+ * @returns {string|null}
+ */
+function declaredMethod(input) {
+  const method = typeof input?.method === 'string' ? input.method.toUpperCase() : null
+  return method && HTTP_METHODS.has(method) ? method : null
+}
+
 export function normalizeItem(item) {
   const accept = item.accepts?.[0]
 
@@ -77,6 +91,7 @@ export function normalizeItem(item) {
       category: 'uncategorized',
       input_schema: null,
       output_schema: null,
+      http_method: null,
       provider: extractProviderFromUrl(url),
       source_id: url,
     }
@@ -86,13 +101,19 @@ export function normalizeItem(item) {
   if (!rawUrl) throw new Error('missing resource URL')
   const url = normalizeUrl(rawUrl)
 
-  const maxAmount = accept.maxAmountRequired
+  // x402 v2 items (#353) moved these fields: the price is `amount`, the
+  // description and service name sit on the item, and the Bazaar declaration
+  // is `extensions.bazaar.info`. v2 first, v1 as the fallback.
+  const maxAmount = accept.amount ?? accept.maxAmountRequired
   const priceUsd = maxAmount ? parseFloat(maxAmount) / 1e6 : null
 
   const paymentAsset = accept.extra?.name || 'USDC'
 
-  const description = accept.description || null
-  const provider = extractProviderFromUrl(url)
+  const description = item.description || accept.description || null
+  const provider = item.serviceName || extractProviderFromUrl(url)
+  const declared = item.extensions?.bazaar?.info
+  const input = declared?.input ?? accept.outputSchema?.input
+  const output = declared?.output ?? accept.outputSchema?.output
   const name = description
     ? description.substring(0, 80) + (description.length > 80 ? '...' : '')
     : url
@@ -108,8 +129,9 @@ export function normalizeItem(item) {
     payment_asset: paymentAsset,
     payment_network: mapNetworkToPaymentNetwork(accept.network || 'base'),
     category: categorizeFromDescription(description) || 'uncategorized',
-    input_schema: accept.outputSchema?.input ? JSON.stringify(accept.outputSchema.input) : null,
-    output_schema: accept.outputSchema?.output ? JSON.stringify(accept.outputSchema.output) : null,
+    input_schema: input ? JSON.stringify(input) : null,
+    output_schema: output ? JSON.stringify(output) : null,
+    http_method: declaredMethod(input),
     provider,
     source_id: sourceId,
   }

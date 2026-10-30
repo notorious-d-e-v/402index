@@ -124,7 +124,7 @@ describe('backfill-embeddings script (#140)', () => {
       await import('./scripts/backfill-embeddings.mjs')
 
       // Verify embeddings were written (db already imported by SEED_SERVICES)
-      const rows = db.prepare('SELECT service_id FROM service_embeddings ORDER BY service_id').all()
+      const rows = db.prepare('SELECT service_id FROM vec_service_embeddings ORDER BY service_id').all()
       if (rows.length !== 3) {
         console.error('FAIL: expected 3 embedding rows, got ' + rows.length)
         __realExit(99)
@@ -185,7 +185,7 @@ describe('backfill-embeddings script (#140)', () => {
 
         import db from './src/db.js'
         const unembedded = db.prepare(
-          'SELECT COUNT(*) as c FROM services s LEFT JOIN service_embeddings se ON se.service_id = s.id WHERE se.service_id IS NULL'
+          'SELECT COUNT(*) as c FROM services s WHERE NOT EXISTS (SELECT 1 FROM vec_service_embeddings v WHERE v.service_id = s.id)'
         ).get().c
         if (unembedded !== 0) {
           console.error('FAIL: expected 0 unembedded, got ' + unembedded)
@@ -209,9 +209,9 @@ describe('backfill-embeddings script (#140)', () => {
       ${SEED_SERVICES(3)}
 
       // Pre-populate embeddings (db already imported by SEED_SERVICES)
-      const blob = Buffer.alloc(6144)
+      const blob = Buffer.from(new Float32Array(1536).fill(0.025).buffer)
       for (let i = 1; i <= 3; i++) {
-        db.prepare("INSERT OR IGNORE INTO service_embeddings (service_id, embedding, model, embedded_at) VALUES (?, ?, 'text-embedding-3-small', 1000)").run('svc'+i, blob)
+        db.prepare('INSERT INTO vec_service_embeddings (service_id, embedding) VALUES (?, ?)').run('svc'+i, blob)
       }
 
       process.argv = ['node', '${SCRIPT.replace(/\\/g, '\\\\')}', '--yes', '--force', '--batch-size', '50', '--rate-limit', '0']
@@ -239,18 +239,16 @@ describe('backfill-embeddings script (#140)', () => {
       // Seed one real service
       db.prepare("INSERT OR IGNORE INTO services (id, name, url, protocol, source) VALUES ('real1', 'Real', 'http://r.test', 'L402', 'test')").run()
 
-      // Insert orphan embedding (FK check off for this insert)
-      db.pragma('foreign_keys = OFF')
-      db.prepare("INSERT INTO service_embeddings (service_id, embedding, model, embedded_at) VALUES ('orphan1', X'00', 'old', 1)").run()
-      db.pragma('foreign_keys = ON')
+      // Insert orphan vector (vec0 carries no foreign key)
+      db.prepare('INSERT INTO vec_service_embeddings (service_id, embedding) VALUES (?, ?)').run('orphan1', Buffer.from(new Float32Array(1536).fill(0.025).buffer))
 
-      const before = db.prepare("SELECT COUNT(*) as c FROM service_embeddings WHERE service_id = 'orphan1'").get().c
+      const before = db.prepare("SELECT COUNT(*) as c FROM vec_service_embeddings WHERE service_id = 'orphan1'").get().c
       if (before !== 1) { console.error('FAIL: orphan not seeded'); __realExit(99) }
 
       process.argv = ['node', '${SCRIPT.replace(/\\/g, '\\\\')}', '--yes', '--batch-size', '50', '--rate-limit', '0']
       await import('./scripts/backfill-embeddings.mjs')
 
-      const after = db.prepare("SELECT COUNT(*) as c FROM service_embeddings WHERE service_id = 'orphan1'").get().c
+      const after = db.prepare("SELECT COUNT(*) as c FROM vec_service_embeddings WHERE service_id = 'orphan1'").get().c
       if (after !== 0) { console.error('FAIL: orphan not deleted, count=' + after); __realExit(99) }
       ${EXIT_FLUSH}
     `
@@ -379,9 +377,9 @@ describe('backfill-embeddings script (#140)', () => {
       ${SEED_SERVICES(3, 'mix')}
 
       // Pre-embed 2 of 3 with old model (db already imported by SEED_SERVICES)
-      const blob = Buffer.alloc(6144)
-      db.prepare("INSERT OR IGNORE INTO service_embeddings (service_id, embedding, model, embedded_at) VALUES (?, ?, 'old-model', 1000)").run('mix1', blob)
-      db.prepare("INSERT OR IGNORE INTO service_embeddings (service_id, embedding, model, embedded_at) VALUES (?, ?, 'old-model', 1000)").run('mix2', blob)
+      const blob = Buffer.from(new Float32Array(1536).fill(0.025).buffer)
+      db.prepare('INSERT INTO vec_service_embeddings (service_id, embedding) VALUES (?, ?)').run('mix1', blob)
+      db.prepare('INSERT INTO vec_service_embeddings (service_id, embedding) VALUES (?, ?)').run('mix2', blob)
 
       process.argv = ['node', '${SCRIPT.replace(/\\/g, '\\\\')}', '--yes', '--force', '--batch-size', '50', '--rate-limit', '0']
       await import('./scripts/backfill-embeddings.mjs')
@@ -391,14 +389,15 @@ describe('backfill-embeddings script (#140)', () => {
         __realExit(99)
       }
 
-      const rows = db.prepare('SELECT service_id, model FROM service_embeddings ORDER BY service_id').all()
+      const rows = db.prepare('SELECT service_id, embedding FROM vec_service_embeddings ORDER BY service_id').all()
       if (rows.length !== 3) {
         console.error('FAIL: expected 3 embedding rows, got ' + rows.length)
         __realExit(99)
       }
-      const allCorrectModel = rows.every(r => r.model === 'text-embedding-3-small')
-      if (!allCorrectModel) {
-        console.error('FAIL: not all rows have correct model: ' + JSON.stringify(rows))
+      // The pre-seeded vectors were constant 0.025; a re-embed replaces them with the fake response.
+      const allReplaced = rows.every(r => new Float32Array(r.embedding.buffer, r.embedding.byteOffset, 1536)[1] !== 0.02500000037252903)
+      if (!allReplaced) {
+        console.error('FAIL: not every vector was re-embedded')
         __realExit(99)
       }
 

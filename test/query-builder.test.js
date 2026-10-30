@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import Database from 'better-sqlite3'
 import { buildServiceQuery, PAGE_COLUMNS } from '../src/queries/services.js'
+import { withQuarantineSchema } from './helpers/test-db.js'
 
 describe('buildServiceQuery', () => {
   it('returns defaults when called with no options', () => {
@@ -180,6 +181,7 @@ describe('buildServiceQuery', () => {
       l402_compliant INTEGER, l402_degrade_reason TEXT, l402_format TEXT,
       lnget_compatible INTEGER, domain_verified INTEGER DEFAULT 0
     )`)
+    withQuarantineSchema(db)
     db.exec(`INSERT INTO services (name, description, url, protocol, status, health_status)
       VALUES ('PayPerQ Image Generation', 'AI image gen', 'https://ppq.ai/api', 'MPP', 'active', 'healthy')`)
     db.exec(`INSERT INTO services (name, description, url, protocol, status, health_status)
@@ -207,6 +209,7 @@ describe('buildServiceQuery', () => {
       l402_compliant INTEGER, l402_degrade_reason TEXT, l402_format TEXT,
       lnget_compatible INTEGER, domain_verified INTEGER DEFAULT 0
     )`)
+    withQuarantineSchema(db)
     db.exec(`INSERT INTO services (name, description, url, protocol, status, health_status)
       VALUES ('100% Uptime API', 'test', 'https://example.com', 'L402', 'active', 'healthy')`)
 
@@ -232,6 +235,7 @@ describe('buildServiceQuery', () => {
       l402_compliant INTEGER, l402_degrade_reason TEXT, l402_format TEXT,
       lnget_compatible INTEGER, domain_verified INTEGER DEFAULT 0
     )`)
+    withQuarantineSchema(db)
     db.exec(`INSERT INTO services (name, description, url, protocol, status, health_status)
       VALUES ('foo\\bar API', 'backslash test', 'https://example.com', 'L402', 'active', 'healthy')`)
     db.exec(`INSERT INTO services (name, description, url, protocol, status, health_status)
@@ -264,6 +268,7 @@ describe('buildServiceQuery', () => {
       lnget_compatible INTEGER, domain_verified INTEGER DEFAULT 0,
       probe_status TEXT DEFAULT 'probeable'
     )`)
+    withQuarantineSchema(db)
     db.exec(`INSERT INTO services (name, url, protocol, status, health_status, probe_status)
       VALUES ('Probeable Svc', 'https://a.com', 'x402', 'active', 'healthy', 'probeable')`)
     db.exec(`INSERT INTO services (name, url, protocol, status, health_status, probe_status)

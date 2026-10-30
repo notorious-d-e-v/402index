@@ -2,6 +2,7 @@ import { describe, it, before } from 'node:test'
 import assert from 'node:assert/strict'
 import Database from 'better-sqlite3'
 import { buildServiceQuery, queryServices, API_COLUMNS, PAGE_COLUMNS } from '../src/queries/services.js'
+import { withQuarantineSchema } from './helpers/test-db.js'
 
 // Minimal schema matching production services table (domain_verified included)
 const CREATE_TABLE = `CREATE TABLE services (
@@ -41,6 +42,7 @@ const CREATE_TABLE = `CREATE TABLE services (
 function makeDb() {
   const db = Database(':memory:')
   db.exec(CREATE_TABLE)
+  withQuarantineSchema(db)
   return db
 }
 

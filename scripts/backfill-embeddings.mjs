@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-// Operator-invoked backfill script for service_embeddings.
+// Operator-invoked backfill for the vector index (vec_service_embeddings), the only vector
+// store since 2026-10-27. Requires sqlite-vec.
 // NOT wired into boot, cron, or CI. Run manually:
 //   node scripts/backfill-embeddings.mjs --yes [--dry-run] [--force] [--batch-size N] [--rate-limit N]
 
@@ -107,24 +108,30 @@ async function main() {
   }
 
   // Dynamic imports — inside main() so the outer try/catch handles init errors
-  const { default: db } = await import('../src/db.js')
+  const { default: db, SQLITE_VEC_AVAILABLE, ensureVecIndex, syncVecEmbedding } = await import('../src/db.js')
   const { composeEmbeddingInput, OPENAI_EMBEDDINGS_URL } = await import('../src/services/embeddings.js')
+
+  if (!SQLITE_VEC_AVAILABLE || !ensureVecIndex(db)) {
+    console.error('Error: sqlite-vec is not available — the vec index is the only place vectors are stored')
+    process.exit(1)
+  }
 
   // Query for services needing embeddings
   const query = args.force
     ? 'SELECT id, name, description, category FROM services ORDER BY id ASC'
     : `SELECT s.id, s.name, s.description, s.category
        FROM services s
-       LEFT JOIN service_embeddings se ON se.service_id = s.id
-       WHERE se.service_id IS NULL
+       WHERE NOT EXISTS (SELECT 1 FROM vec_service_embeddings v WHERE v.service_id = s.id)
        ORDER BY s.id ASC`
 
   const services = db.prepare(query).all()
 
   // Count orphans
-  const orphanCount = db.prepare(
-    'SELECT COUNT(*) as c FROM service_embeddings WHERE service_id NOT IN (SELECT id FROM services)'
-  ).get().c
+  // vec0 is a virtual table and cannot carry a foreign key, so orphans are found by hand.
+  const findOrphans = db.prepare(
+    'SELECT service_id FROM vec_service_embeddings WHERE service_id NOT IN (SELECT id FROM services)'
+  )
+  const orphanCount = findOrphans.all().length
 
   if (args.dryRun) {
     console.log(JSON.stringify({ would_embed: services.length, would_delete_orphans: orphanCount }))
@@ -135,15 +142,6 @@ async function main() {
   let embedded = 0
   let failed = 0
 
-  const upsert = db.prepare(`
-    INSERT INTO service_embeddings (service_id, embedding, model, embedded_at)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(service_id) DO UPDATE SET
-      embedding = excluded.embedding,
-      model = excluded.model,
-      embedded_at = excluded.embedded_at
-  `)
-
   // Process in batches
   for (let i = 0; i < services.length; i += args.batchSize) {
     const batch = services.slice(i, i + args.batchSize)
@@ -153,9 +151,9 @@ async function main() {
 
       try {
         const embedding = await callOpenAIWithRetry(inputText, apiKey, OPENAI_EMBEDDINGS_URL)
-        const blob = Buffer.from(embedding.buffer)
-        const embeddedAt = Math.floor(Date.now() / 1000)
-        upsert.run(service.id, blob, MODEL, embeddedAt)
+        if (!syncVecEmbedding(service.id, Buffer.from(embedding.buffer), db)) {
+          throw new Error('vec index write failed')
+        }
         embedded++
       } catch (err) {
         console.error(`[backfill] failed service_id=${service.id}: ${err.message}`)
@@ -170,10 +168,9 @@ async function main() {
   }
 
   // Orphan cleanup pass
-  const orphanResult = db.prepare(
-    'DELETE FROM service_embeddings WHERE service_id NOT IN (SELECT id FROM services)'
-  ).run()
-  const orphansDeleted = orphanResult.changes
+  const deleteOrphan = db.prepare('DELETE FROM vec_service_embeddings WHERE service_id = ?')
+  let orphansDeleted = 0
+  for (const { service_id } of findOrphans.all()) orphansDeleted += deleteOrphan.run(service_id).changes
 
   const elapsedSeconds = Math.round((Date.now() - startTime) / 1000)
   const summary = { total: services.length, embedded, failed, orphans_deleted: orphansDeleted, elapsed_seconds: elapsedSeconds }

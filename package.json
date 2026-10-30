@@ -25,17 +25,17 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "better-sqlite3": "^12.10.0",
+    "better-sqlite3": "^12.11.1",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.1",
     "helmet": "^8.2.0",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.2.0",
     "light-bolt11-decoder": "^3.2.0",
     "nostr-tools": "^2.23.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.61.0",
     "eslint": "^9.39.4",
     "globals": "^17.6.0",
     "nodemon": "^3.1.0"

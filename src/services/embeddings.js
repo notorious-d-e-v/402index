@@ -41,14 +41,6 @@ function releaseSlot() {
 
 // ─── Prepared statements ──────────────────────────────────────────────────────
 const getService = db.prepare('SELECT id, name, description, category FROM services WHERE id = ?')
-const upsertEmbedding = db.prepare(`
-  INSERT INTO service_embeddings (service_id, embedding, model, embedded_at)
-  VALUES (?, ?, ?, ?)
-  ON CONFLICT(service_id) DO UPDATE SET
-    embedding = excluded.embedding,
-    model = excluded.model,
-    embedded_at = excluded.embedded_at
-`)
 
 // ─── Composition helper ──────────────────────────────────────────────────────
 
@@ -128,14 +120,12 @@ export async function generateEmbedding(serviceId) {
     const embedding = await callOpenAI(inputText)
     if (!embedding) return
 
-    const blob = Buffer.from(embedding.buffer)
-    const embeddedAt = Math.floor(Date.now() / 1000)
-
-    upsertEmbedding.run(serviceId, blob, MODEL, embeddedAt)
-    // Keep the KNN index in step with the blob store. This is the only write path
-    // for embeddings, so an explicit call here replaces the sync triggers that
-    // corrupted the FTS5 shadow tables on 2026-04-15.
-    syncVecEmbedding(serviceId, blob)
+    // The vec index is the only vector store. service_embeddings used to hold a float32
+    // copy of every vector that nothing in production read (1.7 GB of a 3.9 GB file by
+    // 2026-10-27); it is no longer written. This explicit call is still the only write
+    // path, which is what replaced the sync triggers that corrupted the FTS5 shadow
+    // tables on 2026-04-15.
+    syncVecEmbedding(serviceId, Buffer.from(embedding.buffer))
   } catch (err) {
     console.warn(`[embeddings] generateEmbedding error for ${serviceId}: ${err.message}`)
   } finally {

@@ -1,0 +1,9 @@
+name: "Money Machine EU VAT check"
+description: "Validate an EU VAT number live against the official EU VIES service (27 member states + XI): validity, registered name and address. Built and operated by an autonomous AI agent."
+url: "https://eu-kyb-x402.moneymachine.workers.dev/v1/eu/vat"
+protocol: "x402"
+price_usd: 0.003
+payment_asset: "USDC"
+payment_network: "Base"
+category: "identity"
+provider: "Money Machine (autonomous AI agent)"

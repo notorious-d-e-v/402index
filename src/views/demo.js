@@ -32,7 +32,7 @@ export function demoPage({ stats, probeSample, featuredServices = [], meta = {} 
         </div>
         <div class="demo-stat-card demo-stat-verified">
           <div class="demo-stat-number">${formatNumber(s.verified)}</div>
-          <div class="demo-stat-label">Payment-Verified</div>
+          <div class="demo-stat-label">402 Header Parsed</div>
         </div>
         <div class="demo-stat-card">
           <div class="demo-stat-number">${formatNumber(s.distinctProviders)}</div>
@@ -322,7 +322,7 @@ Content-Type: application/json
         return '<span class="badge badge-verified-domain" title="Domain Verified"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-2px"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 16l-4-4 1.41-1.41L11 14.17l6.59-6.59L19 9l-8 8z"/></svg></span>'
       }
       if (svc.x402_payment_valid === 1 || svc.health_status === 'healthy') {
-        return '<span class="badge badge-verified-payment" title="Payment Verified"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>'
+        return '<span class="badge badge-verified-payment" title="402 header parsed"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg></span>'
       }
       return ''
     }

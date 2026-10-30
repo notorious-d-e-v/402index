@@ -154,14 +154,14 @@ describe('embedding write path keeps the vec index in sync', () => {
     assert.equal(count, 0, 'deleteVecEmbedding must remove the row')
   })
 
-  it('generateEmbedding writes to BOTH service_embeddings and the vec index', async (t) => {
+  it('generateEmbedding writes the vec index (and only the vec index)', async (t) => {
     if (!SQLITE_VEC_AVAILABLE) return t.skip('sqlite-vec unavailable')
     insertService('vecidx-writepath', 'VecWritePathProbe')
     stubEmbedFetch(NEAR_VEC)
     await generateEmbedding('vecidx-writepath')
 
     const blobRow = db.prepare('SELECT COUNT(*) AS c FROM service_embeddings WHERE service_id = ?').get('vecidx-writepath').c
-    assert.equal(blobRow, 1, 'service_embeddings row must exist')
+    assert.equal(blobRow, 0, 'service_embeddings is no longer a vector store (2026-10-27)')
     const vecRow = db.prepare('SELECT COUNT(*) AS c FROM vec_service_embeddings WHERE service_id = ?').get('vecidx-writepath').c
     assert.equal(vecRow, 1, 'vec index must be written by the same code path — otherwise it drifts permanently')
   })

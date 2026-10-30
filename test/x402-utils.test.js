@@ -576,7 +576,7 @@ describe('homePage — payment_valid filter', () => {
       categories: [],
     })
     assert.ok(html.includes('name="payment_valid"'))
-    assert.ok(html.includes('Payment verified'))
+    assert.ok(html.includes('402 header parsed'))
   })
 
   it('checkbox is checked when filter is active', async () => {

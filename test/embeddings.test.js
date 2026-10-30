@@ -65,6 +65,7 @@ describe('embeddings module (#138)', () => {
 
   // Cleanup helper
   function cleanupService(serviceId) {
+    try { db.prepare('DELETE FROM vec_service_embeddings WHERE service_id = ?').run(serviceId) } catch {}
     try { db.prepare('DELETE FROM service_embeddings WHERE service_id = ?').run(serviceId) } catch {}
     try { db.prepare('DELETE FROM services WHERE id = ?').run(serviceId) } catch {}
   }
@@ -77,14 +78,10 @@ describe('embeddings module (#138)', () => {
 
       await generateEmbedding(serviceId)
 
-      const row = db.prepare('SELECT * FROM service_embeddings WHERE service_id = ?').get(serviceId)
+      const row = db.prepare('SELECT service_id, embedding FROM vec_service_embeddings WHERE service_id = ?').get(serviceId)
       assert.ok(row, 'embedding row should exist')
       assert.equal(row.service_id, serviceId)
-      assert.equal(row.model, 'text-embedding-3-small')
-      // embedded_at should be recent epoch seconds
-      const now = Math.floor(Date.now() / 1000)
-      assert.ok(row.embedded_at >= now - 5 && row.embedded_at <= now + 1, `embedded_at ${row.embedded_at} should be near ${now}`)
-      // BLOB should be 1536 * 4 = 6144 bytes
+      // The vec index is the only store (2026-10-27): no model/embedded_at columns there.
       assert.equal(row.embedding.length, 6144, 'embedding BLOB should be 6144 bytes')
     } finally {
       cleanupService(serviceId)
@@ -97,7 +94,7 @@ describe('embeddings module (#138)', () => {
     try {
       globalThis.fetch = async () => ({ ok: false, status: 429, json: async () => ({ error: { message: 'rate limited' } }) })
       await generateEmbedding(serviceId) // should not throw
-      const row = db.prepare('SELECT * FROM service_embeddings WHERE service_id = ?').get(serviceId)
+      const row = db.prepare('SELECT service_id, embedding FROM vec_service_embeddings WHERE service_id = ?').get(serviceId)
       assert.equal(row, undefined, 'no row should be inserted on 429')
     } finally {
       cleanupService(serviceId)
@@ -109,7 +106,7 @@ describe('embeddings module (#138)', () => {
     try {
       globalThis.fetch = async () => ({ ok: false, status: 500, json: async () => ({ error: { message: 'server error' } }) })
       await generateEmbedding(serviceId) // should not throw
-      const row = db.prepare('SELECT * FROM service_embeddings WHERE service_id = ?').get(serviceId)
+      const row = db.prepare('SELECT service_id, embedding FROM vec_service_embeddings WHERE service_id = ?').get(serviceId)
       assert.equal(row, undefined, 'no row should be inserted on 500')
     } finally {
       cleanupService(serviceId)
@@ -121,7 +118,7 @@ describe('embeddings module (#138)', () => {
     try {
       globalThis.fetch = async () => { throw new Error('ECONNREFUSED') }
       await generateEmbedding(serviceId) // should not throw
-      const row = db.prepare('SELECT * FROM service_embeddings WHERE service_id = ?').get(serviceId)
+      const row = db.prepare('SELECT service_id, embedding FROM vec_service_embeddings WHERE service_id = ?').get(serviceId)
       assert.equal(row, undefined, 'no row should be inserted on network error')
     } finally {
       cleanupService(serviceId)
@@ -137,7 +134,7 @@ describe('embeddings module (#138)', () => {
         throw err
       }
       await generateEmbedding(serviceId) // should not throw
-      const row = db.prepare('SELECT * FROM service_embeddings WHERE service_id = ?').get(serviceId)
+      const row = db.prepare('SELECT service_id, embedding FROM vec_service_embeddings WHERE service_id = ?').get(serviceId)
       assert.equal(row, undefined, 'no row should be inserted on timeout')
     } finally {
       cleanupService(serviceId)
@@ -362,17 +359,16 @@ describe('embeddings module (#138)', () => {
       assert.equal(res.status, 201, `expected 201, got ${res.status}: ${JSON.stringify(body)}`)
       const serviceId = body.service.id
 
-      // Poll service_embeddings — the hook fires via setImmediate so we need to wait
+      // Poll the vec index — the hook fires via setImmediate so we need to wait
       let row = null
       const delays = [50, 100, 200, 400, 800, 1600]
       for (const delay of delays) {
         await new Promise(r => setTimeout(r, delay))
-        row = db.prepare('SELECT * FROM service_embeddings WHERE service_id = ?').get(serviceId)
+        row = db.prepare('SELECT service_id, embedding FROM vec_service_embeddings WHERE service_id = ?').get(serviceId)
         if (row) break
       }
 
-      assert.ok(row, 'embedding row should exist in service_embeddings after hook fires')
-      assert.equal(row.model, 'text-embedding-3-small')
+      assert.ok(row, 'embedding row should exist in the vec index after hook fires')
       assert.equal(row.embedding.length, 6144, 'embedding BLOB should be 1536 floats × 4 bytes = 6144')
 
       // Verify fetch was called with OpenAI embeddings request
@@ -448,7 +444,7 @@ describe('embeddings module (#138)', () => {
       const delays = [50, 100, 200, 400, 800, 1600]
       for (const delay of delays) {
         await new Promise(r => setTimeout(r, delay))
-        row = db.prepare('SELECT * FROM service_embeddings WHERE service_id = ?').get(serviceId)
+        row = db.prepare('SELECT service_id, embedding FROM vec_service_embeddings WHERE service_id = ?').get(serviceId)
         if (row) break
       }
       assert.ok(row, 'first POST should produce an embedding row')
@@ -484,7 +480,7 @@ describe('embeddings module (#138)', () => {
       assert.equal(openaiCallCount, 1, 'second POST (upsert-update) must NOT trigger another OpenAI call')
 
       // Assert: still exactly 1 embedding row
-      const rowCount = db.prepare('SELECT COUNT(*) as c FROM service_embeddings WHERE service_id = ?').get(serviceId).c
+      const rowCount = db.prepare('SELECT COUNT(*) as c FROM vec_service_embeddings WHERE service_id = ?').get(serviceId).c
       assert.equal(rowCount, 1, 'should have exactly 1 embedding row, not 2')
 
       // Cleanup

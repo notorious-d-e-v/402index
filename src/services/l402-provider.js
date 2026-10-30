@@ -4,6 +4,7 @@ import { DEPRECATED_ENV_URL, DEPRECATED_ENV_API_KEY, DEPRECATED_GATEWAY } from '
 class StubL402Provider {
   async createChallenge() { return null }
   async verifyToken() { return { valid: false } }
+  async getStatus() { return null }
 }
 
 class MockL402Provider {
@@ -30,6 +31,16 @@ class MockL402Provider {
     return {
       valid: true,
       expiresAt: new Date(Date.now() + 24 * 3600000).toISOString(),
+    }
+  }
+
+  async getStatus() {
+    return {
+      healthy: true,
+      activeMacaroons: 0,
+      paidMacaroons: 0,
+      unpaidMacaroons: 0,
+      satsEarnedTotal: 0,
     }
   }
 }
@@ -78,6 +89,23 @@ class PartnerGatewayL402Provider {
       signal: AbortSignal.timeout(5000),
     })
     if (!res.ok) throw new Error(`Partner gateway verify returned ${res.status}`)
+    return await res.json()
+  }
+
+  /**
+   * Read the gateway's own payment counters. This is the only source of truth for whether
+   * anything has ever been paid for — the index keeps no macaroon or token table — so the
+   * digest cites it rather than inferring revenue from traffic rank.
+   *
+   * Short timeout and no retry: this feeds a reporting block, and a slow gateway must not
+   * hold the digest open. Callers are expected to treat a throw as "unknown", not "zero".
+   */
+  async getStatus() {
+    const res = await fetch(`${this.baseUrl}/l402/status`, {
+      headers: { 'Authorization': 'Bearer ' + this.apiKey },
+      signal: AbortSignal.timeout(3000),
+    })
+    if (!res.ok) throw new Error(`Partner gateway status returned ${res.status}`)
     return await res.json()
   }
 }

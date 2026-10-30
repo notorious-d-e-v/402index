@@ -41,7 +41,7 @@ describe('about page methodology', () => {
     const html = aboutPage()
     assert.ok(html.includes('Methodology'), 'should have Methodology heading')
     assert.ok(html.includes('Endpoints indexed'), 'should explain endpoints indexed')
-    assert.ok(html.includes('Payment-verified'), 'should explain payment-verified')
+    assert.ok(html.includes('402 header parsed'), 'should explain the 402-header-parsed mark')
     assert.ok(html.includes('WWW-Authenticate'), 'should mention L402 header')
     assert.ok(html.includes('PAYMENT-REQUIRED'), 'should mention x402 header')
     assert.ok(html.includes('Health status'), 'should explain health status')

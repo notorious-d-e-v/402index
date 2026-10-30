@@ -1,0 +1,9 @@
+name: "webcap — capture (screenshot + OG metadata)"
+url: "https://webcap.shoutsid.fyi/v1/x402/capture"
+protocol: "x402"
+description: "Capture a URL as PNG/JPEG/PDF plus free OG metadata. Gasless x402 USDC payment on Base."
+category: "media"
+provider: "webcap"
+price_usd: 0.001
+payment_asset: "USDC"
+payment_network: "Base"

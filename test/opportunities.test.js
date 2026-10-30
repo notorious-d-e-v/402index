@@ -2,6 +2,7 @@ import { describe, it, beforeEach } from 'node:test'
 import assert from 'node:assert/strict'
 import Database from 'better-sqlite3'
 import { findOpportunities } from '../src/services/opportunities.js'
+import { withQuarantineSchema } from './helpers/test-db.js'
 
 function createTestDb() {
   const db = new Database(':memory:')
@@ -19,6 +20,7 @@ function createTestDb() {
       provider_deleted INTEGER DEFAULT 0
     )
   `)
+  withQuarantineSchema(db)
   return db
 }
 

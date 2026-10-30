@@ -19,6 +19,7 @@ import { layout } from '../views/layout.js'
 import { statsPage } from '../views/stats.js'
 import { statsSimplePage } from '../views/stats-simple.js'
 import { getScoreboardData, getLatencyData, getCategoryGapData } from '../services/daily-snapshot.js'
+import { LISTED, NOT_QUARANTINED, isHostQuarantined } from '../services/visibility.js'
 
 const router = Router()
 
@@ -53,8 +54,7 @@ router.get('/sitemap.xml', (req, res) => {
 
   const services = db.prepare(
     `SELECT id, updated_at FROM services
-     WHERE (status = 'active' OR status IS NULL)
-       AND (provider_deleted = 0 OR provider_deleted IS NULL)
+     WHERE ${LISTED}
        AND is_template = 0 AND is_demo = 0
      ORDER BY updated_at DESC
      LIMIT 1000`
@@ -114,7 +114,7 @@ router.get('/SKILL.md', (req, res) => {
 
 // llms.txt — machine-readable project summary for AI agents
 router.get('/llms.txt', (req, res) => {
-  const ACTIVE_FILTER = "(status = 'active' OR status IS NULL) AND (provider_deleted = 0 OR provider_deleted IS NULL)"
+  const ACTIVE_FILTER = LISTED
   const totalEndpoints = db.prepare(`SELECT COUNT(*) as c FROM services WHERE ${ACTIVE_FILTER}`).get().c
   const l402Count = db.prepare(`SELECT COUNT(*) as c FROM services WHERE ${ACTIVE_FILTER} AND protocol = 'L402'`).get().c
   const x402Count = db.prepare(`SELECT COUNT(*) as c FROM services WHERE ${ACTIVE_FILTER} AND protocol = 'x402'`).get().c
@@ -166,7 +166,7 @@ Setup: See mcp-server/ directory or npm install @402index/mcp-server
 
 // Homepage: ecosystem overview (formerly /demo)
 router.get('/', (req, res) => {
-  const ACTIVE_FILTER = "WHERE (status = 'active' OR status IS NULL) AND (provider_deleted = 0 OR provider_deleted IS NULL)"
+  const ACTIVE_FILTER = `WHERE ${LISTED}`
 
   // Gather stats
   const totalIndexed = db.prepare(`SELECT COUNT(*) as c FROM services ${ACTIVE_FILTER}`).get().c
@@ -244,7 +244,7 @@ router.get('/', (req, res) => {
   ]
   const placeholders = FEATURED_IDS.map(() => '?').join(',')
   const featuredServices = db.prepare(
-    `SELECT ${API_COLUMNS} FROM services WHERE id IN (${placeholders}) AND (status = 'active' OR status IS NULL) AND health_status != 'down'`
+    `SELECT ${API_COLUMNS} FROM services WHERE id IN (${placeholders}) AND (status = 'active' OR status IS NULL) AND ${NOT_QUARANTINED} AND health_status != 'down'`
   ).all(...FEATURED_IDS)
 
   // Preserve FEATURED_IDS order (SQL WHERE IN doesn't guarantee order)
@@ -330,7 +330,7 @@ router.get('/service/:id', (req, res) => {
      WHERE url = ? AND id != ? AND (status = 'active' OR status IS NULL) AND (provider_deleted = 0 OR provider_deleted IS NULL)`
   ).all(service.url, service.id)
 
-  res.send(detailPage({ ...service, health_checks, related_services }))
+  res.send(detailPage({ ...service, health_checks, related_services, quarantine: isHostQuarantined(db, service.hostname) }))
 })
 
 // About
@@ -379,7 +379,7 @@ export function buildProbeSample(database, protocol = 'L402') {
   const service = database.prepare(`
     SELECT id, name, url, protocol, price_sats, price_usd, category, provider, payment_asset, payment_network
     FROM services
-    WHERE (status = 'active' OR status IS NULL)
+    WHERE (status = 'active' OR status IS NULL) AND ${NOT_QUARANTINED}
       AND protocol = ?
       AND health_status = 'healthy'
       AND reliability_score IS NOT NULL
